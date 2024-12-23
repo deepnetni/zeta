@@ -1,0 +1,56 @@
+# Datagen parameters
+onlinesynth_duration: 5
+onlinesynth_sampling_rate: &fs 16000
+onlinesynth_resampling_type: fft  # resampling type if input file has sr != onlinesynth_sampling_rate
+onlinesynth_nearend_prop_noisy: 0.7  # Percentage of nearend files which are altered with noise
+onlinesynth_nearend_snr_interval: [ -5, 15 ]  # SNR (in dB) interval for nearend files affected by noise
+onlinesynth_nearend_prop_add_gaussian_ne_noise: 0.5  # Percentage of additional Gaussian noise added over existing noise
+onlinesynth_prop_add_nearend_speech: 0.0  # prop to add nearend(mic)
+onlinesynth_infant_nearend_snr_interval: [-10, 5]
+onlinesynth_infant_noise_snr_interval: [-5, 15]
+onlinesynth_infant_gain_change: [-8, 8]
+
+
+onlinesynth_nearend_apply_gain_change: 0.0  # Probability to apply random gain change in nearend signal
+#onlinesynth_nearend_normalize_volume: -27  # dB level for nearend / target volume normalization. Comment if no normalization is desired
+#onlinesynth_target_normalize_volume: -22  # dB level for nearend / target volume normalization. Comment if no normalization is desired
+
+
+onlinesynth_nearend_datasets:
+  dns:
+    weight: 1.0
+    dir: '/home/deepni/disk/DNS-Challenge/datasets/clean'
+
+onlinesynth_nearend_noises:
+  dns_challenge:
+    weight: 1.0
+    dir: '/home/deepni/disk/DNS-Challenge/datasets/noise'
+  noise_92:
+    weight: 0.0
+    dir: '/home/deepni/disk/noise_92'
+  noise_wind:
+    weight: 0.0
+    dir: '/home/deepni/disk/wind_ch0'
+  noise_clap:
+    weight: 0.0
+    dir: '/home/deepni/disk/noisy_clap_clips'
+
+onlinesynth_infant_datasets:
+  train:
+    weight: 1.0
+    dir: '/home/deepni/trunk/cry-vad/train/awake'
+  test:
+    weight: 0.0
+    dir: '/home/deepni/trunk/cry-vad/test'
+  # no_cry:
+  #   weight: 0.0
+  #   dir: '/home/deepni/trunk/cry-vad/non-cry'
+
+onlinesynth_self_record_noises:
+  dns_challenge:
+    weight: 0.0
+    dir: '/home/deepni/datasets/new423_liang_bg_noise'
+
+
+
+onlinesynth_mic_distortions:

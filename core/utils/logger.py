@@ -1,0 +1,100 @@
+import logging
+import os
+import sys
+import time
+
+
+class CPrint(object):
+    def __init__(self) -> None:
+        pass
+
+    def u(self, ctx: str, **kwargs):
+        """underline"""
+        print("\033[4m" + ctx + "\033[0m", **kwargs)
+
+    def r(self, ctx: str, **kwargs):
+        print("\033[31m" + ctx + "\033[0m", **kwargs)
+
+    def g(self, ctx: str, **kwargs):
+        print("\033[32m" + ctx + "\033[0m", **kwargs)
+
+    def y(self, ctx: str, **kwargs):
+        print("\033[33m" + ctx + "\033[0m", **kwargs)
+
+    def b(self, ctx: str, **kwargs):
+        print("\033[34m" + ctx + "\033[0m", **kwargs)
+
+    def h(self, ctx: str, **kwargs):
+        print("\033[35m" + ctx + "\033[0m", **kwargs)
+
+    def q(self, ctx: str, **kwargs):
+        print("\033[36m" + ctx + "\033[0m", **kwargs)
+
+    def w(self, ctx: str, **kwargs):
+        print("\033[37m" + ctx + "\033[0m", **kwargs)
+
+
+def get_logger(
+    name,
+    mode="console",
+    dirname=None,
+    level=logging.INFO,
+    fmt_msg="%(asctime)s [%(module)s:%(lineno)d - %(levelname)s] %(message)s",
+    fmt_date="%Y-%m-%d %H:%M:%S",
+) -> logging.Logger:
+    """
+    Args:
+        - name: generator will search the logger by name first.
+        - mode: configure the output target the print message will be sent to.
+            - `file`, the message will be written to the `name` file under `dirname` directory; otherwise, sent to the console;
+            - `console`, default.
+        - level: message that level under `level` parameter will be ignored.
+
+    Examples:
+        1. writer to console
+        logger = getLogger(name)
+        logger.info(...)
+
+        2. writer to dirname/logs/YYMMDD-hhmmss.log
+        logger = getLogger(name, "file")
+        logger = getLogger(name, "file", dirname)
+        logger.info(...)
+    """
+
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+    fmt = logging.Formatter(fmt=fmt_msg, datefmt=fmt_date)
+
+    if mode == "file":
+        if dirname is None:
+            dirname = os.path.join(os.getcwd(), "logs")
+        else:
+            dirname = os.path.join(dirname, "logs")
+
+        if not os.path.exists(dirname):
+            os.mkdir(dirname)
+
+        filename = os.path.join(dirname, time.strftime("%Y-%m-%d-") + name + ".log")
+
+        if os.path.exists(filename):
+            os.remove(filename)
+
+        handler = logging.FileHandler(filename)
+    elif mode == "console":
+        handler = logging.StreamHandler(sys.stdout)
+    else:
+        raise RuntimeError(f"{mode} not supported.")
+
+    handler.setFormatter(fmt)
+    logger.addHandler(handler)
+
+    return logger
+
+
+cprint = CPrint()
+
+if __name__ == "__main__":
+    pt = CPrint()
+    pt.q("heelo")
+    pt.h("heelo")
+    pt.u("heelo")

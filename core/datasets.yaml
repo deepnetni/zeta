@@ -1,0 +1,115 @@
+########### Single-channel NS tasks ############
+FIG6:
+  # SIG Challenge Script dataset
+  train:
+    dirname: '/home/deepni/datasets/dns_wdrc/train_50'
+    patten: "**/*_nearend.wav"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+    flist: "fig6_sig_train.csv"
+    nlen: 5.0
+    min_len: 1.0
+  valid:
+    dirname: '/home/deepni/datasets/dns_wdrc/dev'
+    patten: "**/*_nearend.wav"
+    flist: "fig6_sig_dev.csv"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+  vtest:
+    dirname: '/home/deepni/datasets/dns_wdrc/test'
+    patten: "**/*_nearend.wav"
+    flist: "fig6_sig_test.csv"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+
+########### Multi-channel NS tasks ############
+l3das22:
+  train:
+    path: '/home/deepni/datasets/l3das/L3DAS22_Task1_train100/data'
+    label_path: '/home/deepni/datasets/l3das/L3DAS22_Task1_train100/labels'
+  valid:
+    path: '/home/deepni/datasets/l3das/L3DAS22_Task1_dev/data'
+    label_path: '/home/deepni/datasets/l3das/L3DAS22_Task1_dev/labels'
+  vtest:
+    path: '/home/deepni/datasets/l3das/L3DAS22_Task1_test/data'
+    label_path: '/home/deepni/datasets/l3das/L3DAS22_Task1_test/labels'
+
+chime3:
+  train:
+    path: '/home/deepni/datasets/CHiME3'
+  valid:
+    path: '/home/deepni/datasets/CHiME3'
+  vtest:
+    path: '/home/deepni/datasets/CHiME3'
+
+
+whamr:
+  train:
+    # path: '/home/deepni/disk/wham/generated_r/wav16k/min/tr/mix_single_anechoic'
+    # label_path: '/home/deepni/disk/wham/generated_r/wav16k/min/tr/s1_anechoic'
+    path: '/home/deepni/datasets/whamr/wav16k/min/tr/mix_single_anechoic'
+    label_path: '/home/deepni/datasets/whamr/wav16k/min/tr/s1_anechoic'
+  valid:
+    path: '/home/deepni/datasets/whamr/wav16k/min/cv/mix_single_anechoic'
+    label_path: '/home/deepni/datasets/whamr/wav16k/min/cv/s1_anechoic'
+  vtest:
+    path: '/home/deepni/datasets/whamr/wav16k/min/tt/mix_single_anechoic'
+    label_path: '/home/deepni/datasets/whamr/wav16k/min/tt/s1_anechoic'
+
+########### DNS tasks ############
+DNSChallenge20:
+  # DNS Challenge Script dataset
+  train:
+    dirname: '/home/deepni/datasets/dnsc/dnsc_noisy'
+    clean_dirname: '/home/deepni/datasets/dnsc/dnsc_clean'
+    patten: "**/*.wav"
+    flist: "dnsc20_tr.csv"
+    sub_regex:
+      - '.*fileid_(\w+).wav'
+      - 'clean_fileid_\1.wav'
+    nlen: 5.0
+    min_len: 1.0
+  valid:
+    dirname: '/home/deepni/datasets/dnsc/test_set/synthetic/no_reverb/noisy'
+    clean_dirname: '/home/deepni/datasets/dnsc/test_set/synthetic/no_reverb/clean'
+    patten: "**/*.wav"
+    flist: "dnsc20_val.csv"
+    sub_regex:
+      - '.*fileid_(\w+).wav'
+      - 'clean_fileid_\1.wav'
+  vtest:
+    dirname: '/home/deepni/datasets/dnsc/test_set/synthetic/with_reverb/noisy'
+    clean_dirname: '/home/deepni/datasets/dnsc/test_set/synthetic/with_reverb/clean'
+    patten: "**/*.wav"
+    flist: "dnsc20_vtest.csv"
+    sub_regex:
+      - '.*fileid_(\w+).wav'  # 'xx' equals to r'xx'
+      - 'clean_fileid_\1.wav'
+
+
+########### AEC tasks ############
+AECChallenge8k:
+  train:
+    # path: '/home/deepni/trunk/gene-AEC-train-100-30-p06'
+    path: '/home/deepni/trunk/gene-AEC-train-low-8k'
+  valid:
+    path: '/home/deepni/trunk/gene-AEC-test-low-8k'
+  vtest:
+    path: '/home/deepni/trunk/aec_test_set-low-8k'
+    paths:
+      - '/home/deepni/datasets/AEC-Challenge/datasets/blind_test_set'
+      - '/home/deepni/datasets/AEC-Challenge/datasets/blind_test_set_icassp2022'
+
+AECChallenge:
+  train:
+    path: '/home/deepni/trunk/gene-AEC-train-100-30-p06'
+  valid:
+    path: '/home/deepni/trunk/gene-AEC-test-4-1'
+  vtest:
+    path: '/home/deepni/trunk/aec_test_set'
+    paths:
+      - '/home/deepni/datasets/AEC-Challenge/datasets/blind_test_set'
+      - '/home/deepni/datasets/AEC-Challenge/datasets/blind_test_set_icassp2022'
