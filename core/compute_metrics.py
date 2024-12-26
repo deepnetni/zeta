@@ -1,6 +1,5 @@
 import argparse
 import json
-import multiprocessing as mp
 import os
 import re
 import sys
@@ -15,12 +14,13 @@ from torchmetrics.functional.audio import scale_invariant_signal_distortion_rati
 from torchmetrics.functional.audio import signal_distortion_ratio as SDR
 from tqdm import tqdm
 
+from scripts.l3das.metrics import task1_metric
 from utils.audiolib import audioread
 from utils.composite_metrics import eval_composite
+from utils.logger import cprint
 from utils.metrics import *
 from utils.mp_decoder import mpStarMap
-from scripts.l3das.metrics import task1_metric
-from utils.logger import cprint
+from utils.HAids.PyHASQI.HASQI_revised import HASQI_v2, HASQI_v2_for_unfixedLen
 
 
 def parse():
@@ -46,6 +46,7 @@ def parse():
     parser.add_argument("--stoi", help="stoi", action="store_true")
     parser.add_argument("--asr", help="csig, cbak, covl", action="store_true")
     parser.add_argument("--l3das", help="l3das", action="store_true")
+    parser.add_argument("--hasqi", help="hasqi", action="store_true")
     parser.add_argument("--metrics", help="compute multi-metrics", nargs="+")
 
     # output
@@ -126,9 +127,8 @@ def compute_score(spath, epath, args):
     Example:
         compute_score([files], [files], args=args)
     """
-    # print(spath, epath)
-    edata, _ = audioread(epath)
-    sdata, _ = audioread(spath)
+    sdata, fs1 = audioread(spath)
+    edata, fs2 = audioread(epath)
     # print(edata.shape) if edata.ndim > 1 else None
     # edata = edata.mean(-1) if edata.ndim > 1 else edata
     edata = edata[:, 0] if edata.ndim > 1 else edata
@@ -168,6 +168,15 @@ def compute_score(spath, epath, args):
         metrics.update({"l3das_score": score, "l3das_wer": wer * 100, "l3das_stoi": stoi_sc})
 
     return metrics
+
+
+@mpStarMap(5)
+def compute_hasqi(spath, epath, HL):
+    # TODO
+    sdata, fs1 = audioread(spath)
+    edata, fs2 = audioread(epath)
+    edata = edata[:, 0] if edata.ndim > 1 else edata
+    sdata = sdata[: len(edata)]
 
 
 def compute_box(result: List) -> Dict:

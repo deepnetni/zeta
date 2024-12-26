@@ -30,13 +30,14 @@ def work(filenum: int, yaml, outdir, fs):
     sf.write(f"{outdir}/{filenum}_{mode}_src.wav", audio["src"], fs)
     sf.write(f"{outdir}/{filenum}_{mode}_transform.wav", audio["transform"], fs)
     sf.write(f"{outdir}/{filenum}_{mode}_nearend.wav", audio["nearend"], fs)
+    sf.write(f"{outdir}/{filenum}_{mode}_nearend_fig6.wav", audio["nearend_fig6"], fs)
     sf.write(f"{outdir}/{filenum}_{mode}_target.wav", audio["target"] - audio["target"].mean(), fs)
 
-    sf.write(
-        f"{outdir}/{filenum}_{mode}_comp.wav",
-        np.stack([audio["src"], audio["transform"], audio["target"]], axis=-1),
-        fs,
-    )
+    # sf.write(
+    #     f"{outdir}/{filenum}_{mode}_comp.wav",
+    #     np.stack([audio["src"], audio["transform"], audio["target"]], axis=-1),
+    #     fs,
+    # )
     with open(f"{outdir}/{filenum}_{mode}.json", "w+") as fp:
         json.dump(meta, fp, indent=2)
 

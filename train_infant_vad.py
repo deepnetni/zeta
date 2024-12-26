@@ -9,32 +9,86 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import yaml
-
 # from matplotlib import pyplot as plt
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
-from torchmetrics.functional.audio import scale_invariant_signal_distortion_ratio as si_sdr
+from torchmetrics.functional.audio import \
+    scale_invariant_signal_distortion_ratio as si_sdr
 from torchmetrics.functional.audio import signal_distortion_ratio as SDR
-
 # from utils.conv_stft_loss import MultiResolutionSTFTLoss
 from tqdm import tqdm
 
-from datasets_manager import get_datasets
-from models.APC_SNR.apc_snr import APC_SNR_multi_filter
-from models.conv_stft import STFT
-from models.pase.models.frontend import wf_builder
-from models.VADModel import *
-from utils.audiolib import audioread, audiowrite
-from utils.Engine import Engine
-from utils.focal_loss import BCEFocalLoss
-from utils.ini_opts import read_ini
-from utils.logger import CPrint, cprint
-from utils.losses import loss_compressed_mag, loss_pmsqe, loss_sisnr
-from utils.metrics import compute_precision_and_recall
-from utils.record import REC, RECDepot
-from utils.register import tables
-from utils.stft_loss import MultiResolutionSTFTLoss
-from utils.trunk import VADTrunk, pad_to_longest
+from core.datasets_manager import get_datasets
+from core.models.APC_SNR.apc_snr import APC_SNR_multi_filter
+from core.models.conv_stft import STFT
+from core.models.pase.models.frontend import wf_builder
+from core.models.VADModel import *
+from core.utils.audiolib import audioread, audiowrite
+from core.utils.Engine import Engine
+from core.utils.focal_loss import BCEFocalLoss
+from core.utils.ini_opts import read_ini
+from core.utils.logger import cprint
+from core.utils.losses import loss_compressed_mag, loss_pmsqe, loss_sisnr
+from core.utils.metrics import compute_precision_and_recall
+from core.utils.record import REC, RECDepot
+from core.utils.register import tables
+from core.utils.stft_loss import MultiResolutionSTFTLoss
+from core.utils.trunk import VADTrunk, pad_to_longest
+
+@dataclass
+class Eng_conf:
+    name: str = "crnn_vad"
+    epochs: int = 100
+    desc: str = ""
+    info_dir: str = "trained_infant_vad"
+    resume: bool = True
+    optimizer_name: str = "adam"
+    scheduler_name: str = "stepLR"
+    valid_per_epoch: int = 1
+    vtest_per_epoch: int = 5  # 0 for disabled
+    ## the output dir to store the predict files of `vtest_dset` during testing
+    vtest_outdir: str = "vtest"
+    dsets_raw_metrics: str = "dset_metrics.json"
+    train_batch_sz: int = 14
+    train_num_workers: int = 6
+    valid_batch_sz: int = 24
+    valid_num_workers: int = 4
+    vtest_batch_sz: int = 24
+    vtest_num_workers: int = 4
+
+
+@dataclass
+class Md_conf:
+    # nframe: int = 512
+    # nhop: int = 256
+    feat_size: int = 257
+
+
+@dataclass
+class Conf:
+    config: Eng_conf = Eng_conf()
+    md_conf: Md_conf = Md_conf()
+
+    train_dset: str = "/home/deepni/trunk/infant/train"
+    valid_dset: str = "/home/deepni/trunk/infant/valid"
+    vtest_dset: str = "/home/deepni/trunk/infant/test"
+    vpred_dset: str = "/home/deepni/trunk/cry-vad/test"
+
+
+def fetch_config(cfg_fname=None):
+    if cfg_fname is None:
+        return asdict(Conf())
+
+    print("##", cfg_fname)
+    if os.path.splitext(cfg_fname)[-1] == ".ini":
+        cfg = read_ini(cfg_fname)
+    elif os.path.splitext(cfg_fname)[-1] == ".yaml":
+        with open(cfg_fname, "r") as fp:
+            cfg = yaml.load(fp, Loader=yaml.FullLoader)
+    else:
+        raise RuntimeError("File not supported.")
+
+    return cfg
 
 
 class Train(Engine):
@@ -575,60 +629,6 @@ def parse():
     return args
 
 
-@dataclass
-class Eng_conf:
-    name: str = "crnn_vad"
-    epochs: int = 100
-    desc: str = ""
-    info_dir: str = "trained_infant_vad"
-    resume: bool = True
-    optimizer_name: str = "adam"
-    scheduler_name: str = "stepLR"
-    valid_per_epoch: int = 1
-    vtest_per_epoch: int = 5  # 0 for disabled
-    ## the output dir to store the predict files of `vtest_dset` during testing
-    vtest_outdir: str = "vtest"
-    dsets_raw_metrics: str = "dset_metrics.json"
-    train_batch_sz: int = 14
-    train_num_workers: int = 6
-    valid_batch_sz: int = 24
-    valid_num_workers: int = 4
-    vtest_batch_sz: int = 24
-    vtest_num_workers: int = 4
-
-
-@dataclass
-class Md_conf:
-    # nframe: int = 512
-    # nhop: int = 256
-    feat_size: int = 257
-
-
-@dataclass
-class Conf:
-    config: Eng_conf = Eng_conf()
-    md_conf: Md_conf = Md_conf()
-
-    train_dset: str = "/home/deepni/trunk/infant/train"
-    valid_dset: str = "/home/deepni/trunk/infant/valid"
-    vtest_dset: str = "/home/deepni/trunk/infant/test"
-    vpred_dset: str = "/home/deepni/trunk/cry-vad/test"
-
-
-def fetch_config(cfg_fname=None):
-    if cfg_fname is None:
-        return asdict(Conf())
-
-    print("##", cfg_fname)
-    if os.path.splitext(cfg_fname)[-1] == ".ini":
-        cfg = read_ini(cfg_fname)
-    elif os.path.splitext(cfg_fname)[-1] == ".yaml":
-        with open(cfg_fname, "r") as fp:
-            cfg = yaml.load(fp, Loader=yaml.FullLoader)
-    else:
-        raise RuntimeError("File not supported.")
-
-    return cfg
 
 
 def re_config(conf, args):

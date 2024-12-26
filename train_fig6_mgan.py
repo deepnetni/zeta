@@ -12,28 +12,30 @@ import yaml
 # from matplotlib import pyplot as plt
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
-from torchmetrics.functional.audio import scale_invariant_signal_distortion_ratio as si_sdr
+from torchmetrics.functional.audio import (
+    scale_invariant_signal_distortion_ratio as si_sdr,
+)
 from torchmetrics.functional.audio import signal_distortion_ratio as SDR
 
 # from utils.conv_stft_loss import MultiResolutionSTFTLoss
 from tqdm import tqdm
 
-from datasets_manager import get_datasets
-from models.APC_SNR.apc_snr import APC_SNR_multi_filter
-from models.conv_stft import STFT
-from models.ns_exp_model import *
-from models.pase.models.frontend import wf_builder
-from utils.audiolib import audioread, audiowrite
-from utils.check_flops import check_flops
-from utils.composite_metrics import eval_composite
-from utils.Engine import Engine
-from utils.ini_opts import read_ini
-from utils.logger import cprint
-from utils.losses import loss_compressed_mag, loss_pmsqe, loss_sisnr
-from utils.record import REC, RECDepot
-from utils.register import tables
-from utils.stft_loss import MultiResolutionSTFTLoss
-from utils.trunk import pad_to_longest
+from core.datasets_manager import get_datasets
+from core.models.APC_SNR.apc_snr import APC_SNR_multi_filter
+from core.models.conv_stft import STFT
+from core.models.ns_exp_model import *
+from core.models.pase.models.frontend import wf_builder
+from core.utils.audiolib import audioread, audiowrite
+from core.utils.check_flops import check_flops
+from core.utils.composite_metrics import eval_composite
+from core.utils.Engine import Engine
+from core.utils.ini_opts import read_ini
+from core.utils.logger import cprint
+from core.utils.losses import loss_compressed_mag, loss_pmsqe, loss_sisnr
+from core.utils.record import REC, RECDepot
+from core.utils.register import tables
+from core.utils.stft_loss import MultiResolutionSTFTLoss
+from core.utils.trunk import pad_to_longest
 
 
 class Train(Engine):
@@ -473,7 +475,9 @@ def parse():
     parser.add_argument("--vtest", help="input directory", action="store_true")
     parser.add_argument("--draw", help="input directory", action="store_true")
 
-    parser.add_argument("--conf", help="config file", default="config/yconf_ns_32w64.yaml")
+    parser.add_argument(
+        "--conf", help="config file", default="config/yconf_ns_32w64.yaml"
+    )
     parser.add_argument("--name", help="name of the model")
 
     args = parser.parse_args()

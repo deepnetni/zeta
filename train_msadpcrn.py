@@ -17,21 +17,21 @@ from torchmetrics.functional.audio import signal_distortion_ratio as SDR
 # from utils.conv_stft_loss import MultiResolutionSTFTLoss
 from tqdm import tqdm
 
-from datasets_manager import get_datasets
-from models.APC_SNR.apc_snr import APC_SNR_multi_filter
-from models.MSA_DPCRN import MSA_DPCRN_SPEC_online
-from models.conv_stft import STFT
-from models.pase.models.frontend import wf_builder
-from utils.Engine import Engine
-from utils.audiolib import audioread, audiowrite
-from utils.gcc_phat import gcc_phat
-from utils.ini_opts import read_ini
-from utils.logger import cprint
-from utils.record import REC
-from utils.register import tables
-from utils.stft_loss import MultiResolutionSTFTLoss
-from utils.trunk import pad_to_longest_aec
-from utils.losses import *
+from core.datasets_manager import get_datasets
+from core.models.APC_SNR.apc_snr import APC_SNR_multi_filter
+from core.models.conv_stft import STFT
+from core.models.pase.models.frontend import wf_builder
+from core.utils.audiolib import audioread, audiowrite
+from core.utils.Engine import Engine
+from core.utils.gcc_phat import gcc_phat
+from core.utils.ini_opts import read_ini
+from core.utils.logger import cprint
+from core.utils.losses import *
+from core.utils.record import REC
+from core.utils.register import tables
+from core.utils.stft_loss import MultiResolutionSTFTLoss
+from core.utils.trunk import pad_to_longest_aec
+from core.MSA_DPCRN_FAST import  *
 
 
 @dataclass
@@ -39,7 +39,7 @@ class Eng_conf:
     name: str = "msa_dpcrn"
     epochs: int = 100
     desc: str = ""
-    info_dir: str = r"E:\model_results_trunk\AEC\trained_msadpcrn"
+    info_dir: str = r"E:\model_results_trunk\AEC\trained_msadpcrn_align"
     resume: bool = True
     optimizer_name: str = "adam"
     scheduler_name: str = "stepLR"
@@ -133,7 +133,9 @@ class Train(Engine):
             self.vpred_dset = vpred_dset
 
         # self.stft = STFT(nframe=128, nhop=64, win="hann sqrt").to(self.device)
-        self.stft = STFT(nframe=self.nframe, nhop=self.nhop, win="hann sqrt").to(self.device)
+        self.stft = STFT(nframe=self.nframe, nhop=self.nhop, win="hann sqrt").to(
+            self.device
+        )
         self.stft.eval()
 
         self.raw_metrics = self._load_dsets_metrics(self.dsets_mfile)
@@ -145,11 +147,13 @@ class Train(Engine):
         ).to(self.device)
         self.ms_stft_loss.eval()
 
-        self.pase = wf_builder("config/frontend/PASE+.cfg")
+        self.pase = wf_builder("core/config/frontend/PASE+.cfg")
         assert self.pase is not None
         self.pase.cuda()
         self.pase.eval()
-        self.pase.load_pretrained("pretrained/pase_e199.ckpt", load_last=True, verbose=False)
+        self.pase.load_pretrained(
+            "core/pretrained/pase_e199.ckpt", load_last=True, verbose=False
+        )
 
         self.APC_criterion = APC_SNR_multi_filter(
             model_hop=128,
@@ -556,7 +560,9 @@ def parse():
     parser.add_argument("--epoch", help="epoch", type=int)
     parser.add_argument("--src", help="input directory", type=str)
     parser.add_argument("--out", help="predicting output directory", type=str)
-    parser.add_argument("--root_save_dir", help="root directory of all results", type=str)
+    parser.add_argument(
+        "--root_save_dir", help="root directory of all results", type=str
+    )
     parser.add_argument("--valid_first", help="valid first", action="store_true")
 
     parser.add_argument("--valid", help="input directory", action="store_true")
@@ -608,7 +614,7 @@ def fetch_config(cfg_fname=None):
     return cfg
 
 
-def re_config(conf, args):
+def overrides(conf, args):
     def value(v, default_v):
         return v if v is not None else default_v
 
@@ -622,7 +628,7 @@ if __name__ == "__main__":
     args = parse()
 
     cfg = fetch_config(args.conf)
-    cfg = re_config(cfg, args)
+    cfg = overrides(cfg, args)
 
     md_conf = cfg["md_conf"]
     md_name = cfg["config"]["name"]
@@ -659,7 +665,7 @@ if __name__ == "__main__":
     elif args.online:
         assert args.ckpt is not None
         assert args.out is not None
-        net = MSA_DPCRN_SPEC_online(**cfg["md_conf"])
+        net = MSA_DPCRN_SPEC_ALIGN_online(**cfg["md_conf"])
         net.load_state_dict(torch.load(args.ckpt)["net"])
         net.cuda()
         net.eval()
@@ -678,7 +684,9 @@ if __name__ == "__main__":
             fs = 16000
             tau, _ = gcc_phat(mic, ref, fs=fs, interp=1)
             tau = max(0, int((tau - 0.001) * fs))
-            ref = np.concatenate([np.zeros(tau), ref], axis=-1, dtype=np.float32)[: mic.shape[-1]]
+            ref = np.concatenate([np.zeros(tau), ref], axis=-1, dtype=np.float32)[
+                : mic.shape[-1]
+            ]
         else:
             N = min(len(mic), len(ref))
             N = 16000 * 5
@@ -732,7 +740,9 @@ if __name__ == "__main__":
             fs = 16000
             tau, _ = gcc_phat(mic, ref, fs=fs, interp=1)
             tau = max(0, int((tau - 0.001) * fs))
-            ref = np.concatenate([np.zeros(tau), ref], axis=-1, dtype=np.float32)[: mic.shape[-1]]
+            ref = np.concatenate([np.zeros(tau), ref], axis=-1, dtype=np.float32)[
+                : mic.shape[-1]
+            ]
         else:
             N = min(len(mic), len(ref))
             mic = mic[:N]

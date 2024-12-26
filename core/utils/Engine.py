@@ -162,7 +162,7 @@ class Engine(_EngOpts):
         valid_first: bool = False,
         vtest_outdir: str = "vtest",
         dsets_raw_metrics: str = "",
-        basedir=None,
+        root_save_dir: Optional[str] = None,
         **kwargs,
     ):
         super().__init__()
@@ -194,7 +194,7 @@ class Engine(_EngOpts):
             )
         log.info(f"info dirname: {self.info_dir}")
 
-        name = name if basedir is None else basedir
+        name = name if root_save_dir is None or root_save_dir == "" else root_save_dir
         self.ckpt_dir = self.info_dir / name / "checkpoints"
         self.ckpt_file = self.ckpt_dir / "ckpt.pth"
         self.ckpt_best_file = self.ckpt_dir / "best.pth"
@@ -334,8 +334,8 @@ class Engine(_EngOpts):
             else:  # C,T,F
                 r, i = xk[0, ...], xk[1, ...]
 
-            mag = (r ** 2 + i ** 2) ** 0.5
-            spec = 10 * np.log10(mag ** 2 + 1e-10).transpose(1, 0)  # f,t
+            mag = (r**2 + i**2) ** 0.5
+            spec = 10 * np.log10(mag**2 + 1e-10).transpose(1, 0)  # f,t
 
             if fs != 0:
                 nbin = spec.shape[0]
@@ -416,8 +416,6 @@ class Engine(_EngOpts):
         self.scheduler.load_state_dict(ckpt["scheduler"])
         self.net.load_state_dict(ckpt["net"])
 
-        self.post_load_ckpt(ckpt)
-
     def _print(self, tag: str, state_dict: Dict, epoch: int):
         """
         :param state_dict: {"loss1":1, "loss2":2} or {"i1":{"k1":v1,"k2":v2},"i2":{..}}
@@ -432,9 +430,6 @@ class Engine(_EngOpts):
 
     def post_save_ckpt(self, ckpt_dict):
         return ckpt_dict
-
-    def post_load_ckpt(self, ckpt_dict):
-        pass
 
     def prediction_per_epoch(self, epoch):
         self.net.eval()
@@ -518,11 +513,11 @@ class EngineGAN(Engine):
         )
 
         self.net_D = net_D.to(self.device)
-
         self.optimizer_D = self._config_optimizer(
             optimizer_name, filter(lambda p: p.requires_grad, self.net_D.parameters())
         )
         self.scheduler_D = self._config_scheduler(scheduler_name, self.optimizer_D)
+        self.post_load_ckpt()
 
     def post_save_ckpt(self, ckpt_dict):
         # dict.update is a inplace operation.
@@ -535,7 +530,8 @@ class EngineGAN(Engine):
         )
         return ckpt_dict
 
-    def post_load_ckpt(self, ckpt):
+    def post_load_ckpt(self):
+        ckpt = torch.load(self.ckpt_file, map_location=self.device)
         self.optimizer_D.load_state_dict(ckpt["optimizer_D"])
         self.scheduler_D.load_state_dict(ckpt["scheduler_D"])
         self.net_D.load_state_dict(ckpt["net_D"])

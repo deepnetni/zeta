@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torch
 from torch.autograd import Variable
 from torch import Tensor, nn
-from utils.register import tables
+from core.utils.register import tables
 
 
 def vad_to_frames(vad: Tensor, nframe: int, nhop: int):
@@ -140,6 +140,97 @@ class CRNN_VAD_new(nn.Module):
         sig_out = self.output_dense(gru_out)
 
         return sig_out
+
+
+class CRNN_VAD_new_onnx(nn.Module):
+    """
+    Input: [batch size, channels=1, T, n_fft]
+    Output: [batch size, T, n_fft]
+    """
+
+    def __init__(self, feat_size):
+        super().__init__()
+
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=2,
+                out_channels=4,
+                kernel_size=(1, 3),
+                stride=(1, 2),
+                padding=(0, 1),
+            ),
+            nn.BatchNorm2d(4),
+            nn.PReLU(),
+        )
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=4,
+                out_channels=8,
+                kernel_size=(1, 3),
+                stride=(1, 2),
+                padding=(0, 1),
+            ),
+            nn.BatchNorm2d(8),
+            nn.PReLU(),
+        )
+        # self.conv3 = nn.Sequential(
+        #     nn.Conv2d(
+        #         in_channels=4,
+        #         out_channels=8,
+        #         kernel_size=(1, 3),
+        #         stride=(1, 2),
+        #         padding=(0, 1),
+        #     ),
+        #     nn.BatchNorm2d(8),
+        #     nn.LeakyReLU(negative_slope=0.3),
+        # )
+        # self.conv4 = nn.Sequential(
+        #     nn.Conv2d(
+        #         in_channels=8,
+        #         out_channels=8,
+        #         kernel_size=(1, 3),
+        #         stride=(1, 2),
+        #         padding=(0, 1),
+        #     ),
+        #     nn.BatchNorm2d(8),
+        #     nn.LeakyReLU(negative_slope=0.3),
+        # )
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(in_channels=8, out_channels=16, kernel_size=(1, 3), stride=(1, 2)),
+            nn.BatchNorm2d(16),
+            nn.PReLU(),
+        )
+
+        # feat//8 * 16
+        self.GRU = nn.GRU(
+            input_size=feat_size // 8 * 16,
+            hidden_size=128,
+            num_layers=2,
+            batch_first=True,
+        )
+
+        self.output_dense = nn.Sequential(nn.Linear(128, 1), nn.Sigmoid())
+
+    def forward(self, x, state):
+        # conv
+        # (B, in_c, T, F)
+
+        x1 = self.conv1(x)
+        x2 = self.conv2(x1)
+        x3 = self.conv3(x2)
+        # x4 = self.conv4(x3)
+        # x5 = self.conv5(x4)
+
+        mid_in = x3
+
+        mid_GRU_in = mid_in.permute(0, 2, 1, 3)  # bctf->btcf
+        mid_GRU_in = mid_GRU_in.reshape(mid_GRU_in.size()[0], mid_GRU_in.size()[1], -1)
+
+        gru_out, state_ = self.GRU(mid_GRU_in, state)
+
+        sig_out = self.output_dense(gru_out)
+
+        return sig_out, state_
 
 
 @tables.register("models", "crnn_vad_origin")

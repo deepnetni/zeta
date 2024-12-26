@@ -1,4 +1,6 @@
+import os
 import numpy as np
+
 from eb_operations import *
 
 
@@ -38,7 +40,9 @@ if __name__ == "__main__":
     # x24, fsamp = eb_Resamp24kHz(clean_audio, fs1)
     fsamp = 24000
     # lenx = 71808
-    lenx = 144000
+    # lenx = 144000
+    # lenx = 120000
+    lenx = 119808
 
     Env2_coscf_total, Env2_sincf_total = pre_compute_params(nchan, lenx, fsamp, cfreq1)
     BM2_coscf_total, BM2_sincf_total = pre_compute_params(nchan, lenx, fsamp, cfreq)

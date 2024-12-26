@@ -34,9 +34,10 @@ def segment(fpath: str, ntime: float = 3.0, fs: int = 16000):
 
 
 def run(inp: str, out: str, ntime: float, fs: int):
+    dirout = Path(out)
+
     if os.path.isdir(inp):
         dirname = Path(inp)
-        dirout = Path(out)
         if not dirout.exists():
             os.makedirs(out)
 
@@ -51,7 +52,15 @@ def run(inp: str, out: str, ntime: float, fs: int):
                 wname = dirout / f"{fname}_{idx}{suffix}"
                 sf.write(wname, d, fs)
     elif os.path.isfile(inp):
-        pass
+        fname, suffix = os.path.splitext(inp)
+        fname = fname.rsplit("/", 1)[-1]
+
+        segs = segment(inp, ntime, fs)
+
+        for idx in range(len(segs)):
+            d = segs[idx]
+            wname = dirout / f"{fname}_{idx}{suffix}"
+            sf.write(wname, d, fs)
     else:
         raise RuntimeError("type error")
 

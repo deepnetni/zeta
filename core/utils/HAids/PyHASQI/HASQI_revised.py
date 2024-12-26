@@ -1,15 +1,19 @@
+import sys
+
+# sys.path.append(".")
+
 import soundfile
 import numpy as np
-from eb_EarModel import *
-from eb_EnvSmooth import eb_EnvSmooth
-from eb_melcor import eb_melcor
-from eb_SpectDiff import eb_SpectDiff
-from eb_BMcovary import eb_BMcovary, eb_BMcovary_new
-from eb_AveCovary2 import eb_AveCovary2
-from eb_EarModel_origin import eb_EarModel_compute_origin
+from .eb_EarModel import *
+from .eb_EnvSmooth import eb_EnvSmooth
+from .eb_melcor import eb_melcor
+from .eb_SpectDiff import eb_SpectDiff
+from .eb_BMcovary import eb_BMcovary, eb_BMcovary_new
+from .eb_AveCovary2 import eb_AveCovary2
+from .eb_EarModel_origin import eb_EarModel_compute_origin
 
 
-def HASQI_v2(x, fx, y, fy, HL, eq, Level1):
+def HASQI_v2(x, fx, y, fy, HL, eq=2, Level1=65):
     """
     x is the fig5 compensated audio, y is the output of the compensation model.
     """
@@ -115,5 +119,6 @@ if __name__ == "__main__":
     eq = 2
 
     temp_HASQI = HASQI_v2(clean_audio, fs1, noisy_audio, fs2, HL, eq, Level1)
-
     print(temp_HASQI)
+    temp_HASQI_ = HASQI_v2_for_unfixedLen(clean_audio, fs1, noisy_audio, fs2, HL, eq, Level1)
+    print(temp_HASQI_)

@@ -1,8 +1,29 @@
-from torch import Tensor, nn
 import torch
-from utils.check_flops import check_flops
-from utils.register import tables
-from models.conv_stft import STFT
+from torch import Tensor, nn
+
+from core.models.conv_stft import STFT
+from core.utils.check_flops import check_flops
+from core.utils.register import tables
+
+
+def expand_HT(ht: torch.Tensor, T: int, reso):
+    """
+    ht: B,6
+    output: B,c(1),T,nbin
+    """
+    # batch_size = ht.shape[0]
+    # Freq_size = self.nbin
+
+    m = int(250 / reso)
+    bandarray = torch.tensor([0] + [(2**i) * m for i in range(ht.shape[1])]).to(ht.device)
+
+    repeat_n = bandarray[1:] - bandarray[:-1]
+    repeat_n[0] += 1
+
+    expand_ht = ht.repeat_interleave(repeat_n, dim=-1).unsqueeze(1).unsqueeze(1)  # B,1,1,nbin
+    expand_ht = expand_ht.repeat(1, 1, T, 1) / 100.0
+
+    return expand_ht
 
 
 class LearnableSigmoid(nn.Module):
@@ -47,25 +68,6 @@ class Discriminator(nn.Module):
             LearnableSigmoid(1),
         )
 
-    def expand_ht(self, ht: torch.Tensor, T: int):
-        """
-        ht: B,6
-        output: B,c(1),T,nbin
-        """
-        # batch_size = ht.shape[0]
-        # Freq_size = self.nbin
-
-        m = int(250 / self.reso)
-        bandarray = torch.tensor([0] + [(2**i) * m for i in range(ht.shape[1])])
-
-        repeat_n = bandarray[1:] - bandarray[:-1]
-        repeat_n[0] += 1
-
-        expand_ht = ht.repeat_interleave(repeat_n, dim=-1).unsqueeze(1).unsqueeze(1)  # B,1,1,nbin
-        expand_ht = expand_ht.repeat(1, 1, T, 1) / 100.0
-
-        return expand_ht
-
     def forward(self, x, y, ht):
         """
         x: clean, y: enh, with shape B,T
@@ -76,7 +78,7 @@ class Discriminator(nn.Module):
 
         x_mag = torch.sum(x_spec**2, dim=1)  # b,t,f
         y_mag = torch.sum(y_spec**2, dim=1)
-        ht = self.expand_ht(ht, x_mag.shape[-1])  # b,1,t,f
+        ht = expand_HT(ht, x_mag.shape[-2], self.reso)  # b,1,t,f
 
         x = x_mag.unsqueeze(1)  # b,t,f -> b,1,t,f
         y = y_mag.unsqueeze(1)
@@ -254,25 +256,6 @@ class MGAN_G(nn.Module):
             ),
         )
 
-    def expand_ht(self, ht: torch.Tensor, T: int):
-        """
-        ht: B,6
-        output: B,c(1),T,nbin
-        """
-        # batch_size = ht.shape[0]
-        # Freq_size = self.nbin
-
-        m = int(250 / self.reso)
-        bandarray = torch.tensor([0] + [(2**i) * m for i in range(ht.shape[1])])
-
-        repeat_n = bandarray[1:] - bandarray[:-1]
-        repeat_n[0] += 1
-
-        expand_ht = ht.repeat_interleave(repeat_n, dim=-1).unsqueeze(1).unsqueeze(1)  # B,1,1,nbin
-        expand_ht = expand_ht.repeat(1, 1, T, 1) / 100.0
-
-        return expand_ht
-
     def forward(self, inp, ht):
         """
         inp: B,T
@@ -281,7 +264,7 @@ class MGAN_G(nn.Module):
         # spec: [B, 2, T, Fc]
 
         spec = self.stft.transform(inp)  # b,2,t,f
-        ht = self.expand_ht(ht, spec.shape[-2])
+        ht = expand_HT(ht, spec.shape[-2], self.reso)
 
         cat_input = torch.cat([spec, ht], dim=1)
         conv_out1 = self.conv1(cat_input)
@@ -318,16 +301,17 @@ class MGAN_G(nn.Module):
 
         ####### simple complex reconstruct
 
+        # B,T,F
         enh_real = noisy_real * mask_real - noisy_imag * mask_imag
         enh_imag = noisy_real * mask_imag + noisy_imag * mask_real
 
-        spec_out = torch.concatenate([enh_real, enh_imag], dim=1)
+        spec_out = torch.stack([enh_real, enh_imag], dim=1)
         out = self.stft.inverse(spec_out)
         return out
 
 
 if __name__ == "__main__":
-    inputs = torch.randn(2, 1600)
+    inputs = torch.randn(2, 16000)
     # inputs_ht = torch.randn(1, 1, 100, 257)
     inputs_ht = torch.tensor([[2, 4, 8, 16, 32, 64], [1, 2, 3, 4, 5, 6]])
 
@@ -335,6 +319,9 @@ if __name__ == "__main__":
 
     # out = net.expand_ht(inputs_ht, 10)
     out = net(inputs, inputs_ht)
+
+    net = Discriminator(16)
+    out = net(inputs, inputs, inputs_ht)
     print(out.shape)
 
     # check_flops(Model, inputs, inputs_ht)

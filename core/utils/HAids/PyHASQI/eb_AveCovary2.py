@@ -1,5 +1,5 @@
 import numpy as np
-from eb_operations import eb_CenterFreq
+from .eb_operations import eb_CenterFreq
 
 
 def eb_AveCovary2(sigcov, sigMSx, thr):

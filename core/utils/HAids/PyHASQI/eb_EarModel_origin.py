@@ -1,5 +1,5 @@
 import numpy as np
-from eb_operations import *
+from .eb_operations import *
 import copy
 
 

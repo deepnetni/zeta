@@ -496,58 +496,58 @@ class VADTrunk(Dataset):
             raise StopIteration
 
 
-class FIG6Trunk(NSTrunk):
-    def __init__(self, *args, **kwargs):
-        super(FIG6Trunk, self).__init__(*args, **kwargs)
+# class FIG6Trunk(NSTrunk):
+#     def __init__(self, *args, **kwargs):
+#         super(FIG6Trunk, self).__init__(*args, **kwargs)
 
-    def __getitem__(self, index) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        el = self.f_list[index]
-        f_mic, f_sph = el["f"]
-        st, ed, pd = el["start"], el["end"], el["pad"]
+#     def __getitem__(self, index) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+#         el = self.f_list[index]
+#         f_mic, f_sph = el["f"]
+#         st, ed, pd = el["start"], el["end"], el["pad"]
 
-        hl_f = re.sub(r"(\w*)_nearend.wav", r"\1.json", f_mic)
-        with open(hl_f, "r") as fp:
-            ctx = json.load(fp)
-            hl = ast.literal_eval(ctx["HL"])
+#         hl_f = re.sub(r"(\w*)_nearend.wav", r"\1.json", f_mic)
+#         with open(hl_f, "r") as fp:
+#             ctx = json.load(fp)
+#             hl = ast.literal_eval(ctx["HL"])
 
-        d_mic, fs_1 = audioread(f_mic, sub_mean=True, target_level=self.norm)
-        d_sph, fs_2 = audioread(f_sph, sub_mean=True, target_level=self.norm)
-        assert fs_1 == fs_2
+#         d_mic, fs_1 = audioread(f_mic, sub_mean=True, target_level=self.norm)
+#         d_sph, fs_2 = audioread(f_sph, sub_mean=True, target_level=self.norm)
+#         assert fs_1 == fs_2
 
-        d_mic = np.pad(d_mic[st:ed], (0, pd), "constant", constant_values=0)
-        d_sph = np.pad(d_sph[st:ed], (0, pd), "constant", constant_values=0)
+#         d_mic = np.pad(d_mic[st:ed], (0, pd), "constant", constant_values=0)
+#         d_sph = np.pad(d_sph[st:ed], (0, pd), "constant", constant_values=0)
 
-        return (
-            torch.from_numpy(d_mic).float(),
-            torch.from_numpy(d_sph).float(),
-            torch.tensor(hl).float(),
-        )
+#         return (
+#             torch.from_numpy(d_mic).float(),
+#             torch.from_numpy(d_sph).float(),
+#             torch.tensor(hl).float(),
+#         )
 
-    def __next__(self) -> Tuple[torch.Tensor, torch.Tensor, str]:
-        """used for predict api
-        return: data, relative path
-        """
-        if self.pick_idx < len(self.f_list):
-            el = self.f_list[self.pick_idx]
-            f_mic, f_sph = el["f"]
-            # st, ed, pd = el["start"], el["end"], el["pad"]
-            hl_f = re.sub(r"(\w*)_nearend.wav", r"\1.json", f_mic)
-            with open(hl_f, "r") as fp:
-                ctx = json.load(fp)
-                hl = ast.literal_eval(ctx["HL"])
+#     def __next__(self) -> Tuple[torch.Tensor, torch.Tensor, str]:
+#         """used for predict api
+#         return: data, relative path
+#         """
+#         if self.pick_idx < len(self.f_list):
+#             el = self.f_list[self.pick_idx]
+#             f_mic, f_sph = el["f"]
+#             # st, ed, pd = el["start"], el["end"], el["pad"]
+#             hl_f = re.sub(r"(\w*)_nearend.wav", r"\1.json", f_mic)
+#             with open(hl_f, "r") as fp:
+#                 ctx = json.load(fp)
+#                 hl = ast.literal_eval(ctx["HL"])
 
-            d_mic, _ = audioread(f_mic, sub_mean=True, target_level=self.norm)
-            fname = (
-                f_sph
-                if self.return_abspath
-                else str(Path(f_sph).relative_to(self.clean_dir.parent))
-            )
+#             d_mic, _ = audioread(f_mic, sub_mean=True, target_level=self.norm)
+#             fname = (
+#                 f_sph
+#                 if self.return_abspath
+#                 else str(Path(f_sph).relative_to(self.clean_dir.parent))
+#             )
 
-            self.pick_idx += 1
+#             self.pick_idx += 1
 
-            return torch.from_numpy(d_mic).float()[None, :], torch.tensor(hl).float(), fname
-        else:
-            raise StopIteration
+#             return torch.from_numpy(d_mic).float()[None, :], torch.tensor(hl).float(), fname
+#         else:
+#             raise StopIteration
 
 
 @tables.register("datasets", "aec-challenge")

@@ -2,9 +2,9 @@ from clarity.evaluator.hasqi import hasqi_v2
 from clarity.utils.audiogram import Audiogram
 import sys
 
-sys.path.append("..")
-from utils.HAids.wdrc import wdrc_process
-from utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation, FIG6_compensation_vad
+sys.path.append("../..")
+from core.utils.HAids.wdrc import wdrc_process
+from core.utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation, FIG6_compensation_vad
 import soundfile
 import numpy as np
 

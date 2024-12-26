@@ -10,7 +10,7 @@ from typing import Dict
 
 from .wdrc_transforms import TransConfig, apply_gain, transform_pipline
 from utils.HAids.wdrc import wdrc_process
-from utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation
+from utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation, FIG6_compensation_vad
 from utils.vad import VAD
 
 
@@ -212,7 +212,7 @@ class Synthesizer:
             # )
             self.self_datasets = None
 
-        self.vad_detect = VAD(10, self.cfg["onlinesynth_sampling_rate"], level=2)
+        # self.vad_detect = VAD(10, self.cfg["onlinesynth_sampling_rate"], level=2)
         self.transforms = [apply_gain]
 
         self.fig6_cfg = self.cfg["fig6_compensation_conf"]
@@ -267,10 +267,10 @@ class Synthesizer:
                 x_transform, info = transform_pipline(
                     x_src, self.transforms, TransConfig(gain_duration=None)
                 )
-                self.vad_detect.reset()
-                x_vad = np.ones_like(x_src) * 0.95
-                vad_lbl = self.vad_detect.vad_waves(x_src)  # T,
-                x_vad[: len(vad_lbl)] = vad_lbl
+                # self.vad_detect.reset()
+                # x_vad = np.ones_like(x_src) * 0.95
+                # vad_lbl = self.vad_detect.vad_waves(x_src)  # T,
+                # x_vad[: len(vad_lbl)] = vad_lbl
                 if x_transform is not None:
                     break
         else:
@@ -319,24 +319,40 @@ class Synthesizer:
         HL = self.audiogram[np.random.choice(self.audiogram.shape[0])]
         info.update({"HL": np.array2string(HL, separator=",")})
 
-        x_target = FIG6_compensation(
+        # x_target = FIG6_compensation(
+        #     HL,
+        #     x_transform,
+        #     self.fig6_cfg["sample_rate"],
+        #     self.fig6_cfg["nframe"],
+        #     self.fig6_cfg["nhop"],
+        # )
+        # x_target_vad = np.where(x_vad > 0.5, x_target, x_transform)
+        x_target_vad = FIG6_compensation_vad(
             HL,
             x_transform,
             self.fig6_cfg["sample_rate"],
             self.fig6_cfg["nframe"],
             self.fig6_cfg["nhop"],
         )
-        x_target_vad = np.where(x_vad > 0.5, x_target, x_transform)
+
+        x_nearend_fig6 = FIG6_compensation_vad(
+            HL,
+            x_nearend,
+            self.fig6_cfg["sample_rate"],
+            self.fig6_cfg["nframe"],
+            self.fig6_cfg["nhop"],
+        )
+
         info.update(
             {
                 "input_RMS": rms(x_transform, True).round(2),
-                "output_RMS:": rms(x_target, True).round(2),
+                "output_RMS:": rms(x_target_vad, True).round(2),
             }
         )
         if x_noise is None:
             x_noise = np.zeros_like(x_nearend)
 
-        assert len(x_nearend) == len(x_transform) == len(x_noise) == len(x_target)
+        assert len(x_nearend) == len(x_transform) == len(x_noise) == len(x_target_vad)
 
         # # normalize volume
         # nearend_level = self.cfg.get("onlinesynth_nearend_normalize_volume", None)
@@ -355,6 +371,7 @@ class Synthesizer:
             transform=x_transform,  # data before wdrc
             target=x_target_vad,  # wdrc(x_transform)
             nearend=x_nearend,  # mix, x_transform + noise
+            nearend_fig6=x_nearend_fig6,
             noise=x_noise,
             info=info,
             # vad=x_vad,

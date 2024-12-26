@@ -195,8 +195,8 @@ def eb_GammatoneEnv2_origin(x, BWx, y, BWy, fs, cf):
         coscf[n] = cold
         sincf[n] = sold
 
-    coscf = np.ones(npts, dtype="float32")
-    sincf = np.ones(npts, dtype="float32")
+    # coscf = np.ones(npts, dtype="float32")
+    # sincf = np.ones(npts, dtype="float32")
 
     # ureal = signal.filtfilt([1, a1, a5], [1, -a1, -a2, -a3, -a4], x * coscf)
     ureal = signal.lfilter([1, a1, a5], [1, -a1, -a2, -a3, -a4], x * coscf)
@@ -330,8 +330,8 @@ def eb_GammatoneBM2_origin(x, BWx, y, BWy, fs, cf):
         coscf[n] = cold
         sincf[n] = sold
 
-    coscf = np.ones(npts, dtype="float32")
-    sincf = np.ones(npts, dtype="float32")
+    # coscf = np.ones(npts, dtype="float32")
+    # sincf = np.ones(npts, dtype="float32")
 
     ureal = signal.lfilter([1, a1, a5], [1, -a1, -a2, -a3, -a4], x * coscf)
     uimag = signal.lfilter([1, a1, a5], [1, -a1, -a2, -a3, -a4], x * sincf)

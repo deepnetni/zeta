@@ -3,7 +3,7 @@ FIG6:
   # SIG Challenge Script dataset
   train:
     dirname: '/home/deepni/datasets/dns_wdrc/train_50'
-    patten: "**/*_nearend.wav"
+    pattern: '[!.]*_nearend.wav'
     keymap:
        - "nearend.wav"
        - "target.wav"
@@ -12,14 +12,14 @@ FIG6:
     min_len: 1.0
   valid:
     dirname: '/home/deepni/datasets/dns_wdrc/dev'
-    patten: "**/*_nearend.wav"
+    pattern: "**/[!.]*_nearend.wav"
     flist: "fig6_sig_dev.csv"
     keymap:
        - "nearend.wav"
        - "target.wav"
   vtest:
     dirname: '/home/deepni/datasets/dns_wdrc/test'
-    patten: "**/*_nearend.wav"
+    pattern: "**/[!.]*_nearend.wav"
     flist: "fig6_sig_test.csv"
     keymap:
        - "nearend.wav"

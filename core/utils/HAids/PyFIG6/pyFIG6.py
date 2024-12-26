@@ -366,5 +366,6 @@ if __name__ == "__main__":
     # src = np.ones(1600)
     src, fs = sf.read("/home/deepni/datasets/dnsc/dnsc_clean/clean_fileid_0.wav")
     out = FIG6_compensation(HL, src)
-    sf.write("out.wav", out, fs)
+    print(out.shape, src.shape)
+    # sf.write("out.wav", out, fs)
     # sf.write("src.wav", src, fs)

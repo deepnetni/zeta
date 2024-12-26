@@ -210,14 +210,23 @@ def compute_precision_and_recall(lbl: np.ndarray, est: np.ndarray):
 
 
 if __name__ == "__main__":
-    inp = np.random.randn(16000) + 10
-    lbl = np.random.randn(16000) + 10
+    from torchmetrics.functional.audio import signal_distortion_ratio as SDR
+    import torch
 
-    l = compute_pesq(lbl, inp)
-    print(l)
+    inp = np.random.randn(2, 16000) + 10
+    lbl = np.random.randn(2, 16000) + 10
 
-    inp = np.concatenate([inp, torch.zeros(20000)], axis=-1)
-    lbl = np.concatenate([lbl, torch.zeros(20000)], axis=-1)
-    l = compute_pesq(lbl, inp)
-    print(l)
-    pass
+    print(inp.shape)
+    # l = compute_pesq(lbl, inp)
+    # print(l)
+
+    # inp = np.concatenate([inp, torch.zeros(20000)], axis=-1)
+    # lbl = np.concatenate([lbl, torch.zeros(20000)], axis=-1)
+    # l = compute_pesq(lbl, inp)
+    # print(l)
+
+    score = compute_si_snr(lbl, inp)
+    print(score, type(score))
+
+    score = SDR(preds=torch.from_numpy(inp), target=torch.from_numpy(lbl))
+    print(score)
