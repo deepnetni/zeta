@@ -1,6 +1,6 @@
 from typing import Optional, Union
 import torch
-from torch import nn, einsum
+from torch import Tensor, nn, einsum
 import torch.nn.functional as F
 
 from einops import rearrange
@@ -88,7 +88,16 @@ class Attention(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x, context=None, mask=None, context_mask=None):
+    def forward(self, x: Tensor, context=None, mask=None, context_mask=None):
+        """
+
+        :param x: B,N,D
+        :param context: B,N_,D, N_ should equal N in x
+        :param mask: N,N_; 1 is effective.
+        :param context_mask:
+        :returns:
+
+        """
         n, device, h, max_pos_emb, has_context = (
             x.shape[-2],
             x.device,
@@ -101,26 +110,27 @@ class Attention(nn.Module):
         q, k, v = (self.to_q(x), *self.to_kv(context).chunk(2, dim=-1))
         q, k, v = map(lambda t: rearrange(t, "b n (h d) -> b h n d", h=h), (q, k, v))
 
-        dots = einsum("b h i d, b h j d -> b h i j", q, k) * self.scale
+        dots = einsum("b h i d, b h j d -> b h i j", q, k) * self.scale  # BHNN_
 
         # shaw's relative positional embedding
-        seq = torch.arange(n, device=device)
-        dist = rearrange(seq, "i -> i ()") - rearrange(seq, "j -> () j")
+        seq = torch.arange(n, device=device)  # n is the T
+        dist = rearrange(seq, "i -> i ()") - rearrange(seq, "j -> () j")  # NN_
         dist = dist.clamp(-max_pos_emb, max_pos_emb) + max_pos_emb
-        rel_pos_emb = self.rel_pos_emb(dist).to(q)
+        rel_pos_emb = self.rel_pos_emb(dist).to(q)  # NN_D
         pos_attn = einsum("b h n d, n r d -> b h n r", q, rel_pos_emb) * self.scale
         dots = dots + pos_attn
 
         if exists(mask) or exists(context_mask):
-            mask = default(mask, lambda: torch.ones(*x.shape[:2], device=device))
-            context_mask = (
-                default(context_mask, mask)
-                if not has_context
-                else default(context_mask, lambda: torch.ones(*context.shape[:2], device=device))
-            )
+            mask = default(mask, x.new_ones(*x.shape[:2]))  # B,N
+            if not has_context:
+                context_mask = default(context_mask, mask)
+            else:  # has context
+                context_mask = default(context_mask, x.new_ones(*context.shape[:2]))
+
             mask_value = -torch.finfo(dots.dtype).max
             mask = rearrange(mask, "b i -> b () i ()") * rearrange(context_mask, "b j -> b () () j")
-            dots.masked_fill_(~mask, mask_value)
+            # masked_fill replace the value where cond is True
+            dots.masked_fill_(~mask.bool(), mask_value)
 
         attn = dots.softmax(dim=-1)
 
@@ -177,13 +187,13 @@ class ConformerBlock(nn.Module):
         self,
         *,
         dim,
-        # dim_head=64,
         heads=8,
         ff_mult=4,
         conv_expansion_factor=2,
         conv_kernel_size=31,
-        attn_dropout=0.0,
-        ff_dropout=0.0,
+        conv_causal_mode=True,
+        attn_dropout=0.2,
+        ff_dropout=0.2,
         conv_dropout=0.0,
     ):
         super().__init__()
@@ -191,19 +201,20 @@ class ConformerBlock(nn.Module):
         # self.attn = Attention(
         #     dim=dim, dim_head=dim_head, heads=heads, dropout=attn_dropout
         # )
+        self.attn_pre_norm = nn.LayerNorm(dim)
         self.attn = nn.MultiheadAttention(
             embed_dim=dim, num_heads=heads, batch_first=True, dropout=attn_dropout
         )
         self.conv = ConformerConvModule(
             dim=dim,
-            causal=False,
+            causal=conv_causal_mode,
             expansion_factor=conv_expansion_factor,
             kernel_size=conv_kernel_size,
             dropout=conv_dropout,
         )
         self.ff2 = FeedForward(dim=dim, mult=ff_mult, dropout=ff_dropout)
 
-        self.attn = PreNorm(dim, self.attn)
+        # self.attn = PreNorm(dim, self.attn)
         self.ff1 = Scale(0.5, PreNorm(dim, self.ff1))
         self.ff2 = Scale(0.5, PreNorm(dim, self.ff2))
 
@@ -214,6 +225,8 @@ class ConformerBlock(nn.Module):
         mask the componet where the mask is True.
 
         x with shape (B,T,H)
+
+        return: B,T,T
         """
         nT = x.shape[-2]
 
@@ -222,17 +235,18 @@ class ConformerBlock(nn.Module):
             # assert attn_wlen >= 1
             mask_prev = torch.ones(nT, nT, device=x.device, dtype=torch.bool).tril_(-attn_wlen)
             mask = mask + mask_prev
-        return mask
+        return mask.bool()
 
     def forward(
         self,
         x,
         mask: Optional[torch.Tensor] = None,
-        need_weights=False,
+        need_weights=True,
     ):
         x = self.ff1(x) + x
         # x = self.attn(x, mask=mask) + x
 
+        x = self.attn_pre_norm(x)
         x_mhsa, attn = self.attn(
             x, x, x, need_weights=need_weights, average_attn_weights=False, attn_mask=mask
         )
@@ -241,4 +255,11 @@ class ConformerBlock(nn.Module):
         x = self.conv(x) + x
         x = self.ff2(x) + x
         x = self.post_norm(x)
-        return x
+        return x, attn
+
+
+if __name__ == "__main__":
+    inp = torch.randn(2, 10, 20)
+    net = ConformerBlock(dim=20, heads=4)
+    out, attn = net(inp)
+    print(out.shape, attn.shape)

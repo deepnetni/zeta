@@ -167,6 +167,10 @@ class DPRNN_Block(nn.Module):
 
 @tables.register("models", "FTCRN")
 class MGAN_G(nn.Module):
+    """
+    Cheng, J., Liang, R., Zhao, L., Huang, C. and Schuller, B.W., 2023. Speech denoising and compensation for hearing aids using an FTCRN-based metric GAN. IEEE Signal Processing Letters, 30, pp.374-378.
+    """
+
     def __init__(self, nframe=512, nhop=256):
         super().__init__()
 

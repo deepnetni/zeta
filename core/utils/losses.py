@@ -215,6 +215,34 @@ def loss_compressed_mag(sph: Tensor, est: Tensor, compress_factor=0.3):
     return mse_mag, mse_specs
 
 
+def anti_wrapping_fn(x):
+    return torch.abs(x - torch.round(x / (2 * torch.pi)) * 2 * torch.pi)
+
+
+def loss_phase(xk_sph, xk_est):
+    """
+    input with shape, b,2,t,f
+
+    Paper: Ai, Y. and Ling, Z.H., 2023, June. Neural speech phase prediction based on parallel estimation architecture and anti-wrapping losses. In ICASSP 2023-2023 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) (pp. 1-5). IEEE.
+    """
+    sph_r, sph_i = xk_sph[:, 0, ...], xk_sph[:, 1, ...]  # b,t,f
+    est_r, est_i = xk_est[:, 0, ...], xk_est[:, 1, ...]
+
+    phase_r = torch.atan2(sph_i, sph_r)
+    phase_g = torch.atan2(est_i, est_r)
+    # instantaneous phase loss
+    ip_loss = torch.mean(anti_wrapping_fn(phase_r - phase_g))
+    # group delay loss
+    gd_loss = torch.mean(anti_wrapping_fn(torch.diff(phase_r, dim=2) - torch.diff(phase_g, dim=2)))
+    # instantaneous angular frequency
+    iaf_loss = torch.mean(anti_wrapping_fn(torch.diff(phase_r, dim=1) - torch.diff(phase_g, dim=1)))
+
+    phase_loss = ip_loss + gd_loss + iaf_loss
+    return phase_loss, dict(
+        ip_loss=ip_loss.detach(), gd_loss=gd_loss.detach(), iaf_loss=iaf_loss.detach()
+    )
+
+
 def loss_echo_aware(sph, est):
     """TODO unfinished
     Args:

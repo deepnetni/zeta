@@ -1,30 +1,29 @@
-import sys
 import argparse
 import os
+import sys
 from dataclasses import asdict, dataclass, field
 
 import torch
 import torch.nn.functional as F
 import yaml
-
-
 from tqdm import tqdm
 
 from core.datasets_manager import get_datasets
-from core.rebuild.FTCRN import *
+from core.JointNSHModel import *
+from core.rebuild.FTCRN import Discriminator
+from core.Trainer_woGAN_for_fig6 import Trainer, TrainerMultiOutputs
 from core.utils.audiolib import audioread, audiowrite
 from core.utils.ini_opts import read_ini
 from core.utils.logger import cprint
 from core.utils.register import tables
-from core.Trainer_wGAN_for_fig6 import Trainer
 
 
 @dataclass
 class Eng_conf:
-    name: str = "FTCRN"
+    name: str = "baseline_fig6"
     epochs: int = 50
     desc: str = ""
-    info_dir: str = r"/home/deepni/model_results_trunk/FIG6/trained_FTCRN_GAN"
+    info_dir: str = r"/home/deepni/model_results_trunk/FIG6/trained_fig6_woGAN"
     resume: bool = True
     optimizer_name: str = "adam"
     scheduler_name: str = "stepLR"
@@ -34,7 +33,7 @@ class Eng_conf:
     vtest_outdir: str = "vtest"
     dsets_raw_metrics: str = "dset_metrics.json"
 
-    train_batch_sz: int = 14
+    train_batch_sz: int = 8
     train_num_workers: int = 16
     valid_batch_sz: int = 24
     valid_num_workers: int = 16
@@ -46,6 +45,8 @@ class Eng_conf:
 class Model_conf:
     nframe: int = 512
     nhop: int = 256
+    mid_channel: int = 48
+    conformer_num: int = 2
 
 
 @dataclass
@@ -116,6 +117,11 @@ if __name__ == "__main__":
     md_conf = cfg["md_conf"]
     md_name = cfg["config"]["name"]
 
+    if md_name == "baseline_fig6":
+        Trainer = Trainer
+    else:
+        Trainer = TrainerMultiOutputs
+
     tables.print() if args.train else None
 
     cprint.r(f"current: {md_name}")
@@ -134,7 +140,6 @@ if __name__ == "__main__":
             valid_dset,
             vtest_dset,
             net=net,
-            net_D=Discriminator(ndf=16),
             valid_first=args.valid_first,
             root_save_dir=args.root_save_dir,
             **init,

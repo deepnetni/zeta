@@ -3,11 +3,11 @@ FIG6:
   # SIG Challenge Script dataset
   train:
     dirname: '/home/deepni/datasets/dns_wdrc/train_50'
+    flist: "fig6_sig_train.csv"
     pattern: '[!.]*_nearend.wav'
     keymap:
        - "nearend.wav"
        - "target.wav"
-    flist: "fig6_sig_train.csv"
     nlen: 5.0
     min_len: 1.0
   valid:
@@ -24,6 +24,61 @@ FIG6:
     keymap:
        - "nearend.wav"
        - "target.wav"
+
+FIG6small:
+  # SIG Challenge Script dataset
+  train:
+    dirname: '/home/deepni/datasets/dns_wdrc/train_30_ablation'
+    flist: "fig6_sig_train_30.csv"
+    pattern: '[!.]*_nearend.wav'
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+    nlen: 5.0
+    min_len: 1.0
+  valid:
+    dirname: '/home/deepni/datasets/dns_wdrc/dev'
+    pattern: "**/[!.]*_nearend.wav"
+    flist: "fig6_sig_dev.csv"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+  vtest:
+    dirname: '/home/deepni/datasets/dns_wdrc/test'
+    pattern: "**/[!.]*_nearend.wav"
+    flist: "fig6_sig_test.csv"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+
+FIG6smallVad:
+  # SIG Challenge Script dataset
+  train:
+    dirname: '/home/deepni/datasets/dns_wdrc/train_30_ablation'
+    flist: "fig6_sig_train_30.csv"
+    pattern: '[!.]*_nearend.wav'
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+    nlen: 5.0
+    min_len: 1.0
+    vad: True
+  valid:
+    dirname: '/home/deepni/datasets/dns_wdrc/dev'
+    pattern: "**/[!.]*_nearend.wav"
+    flist: "fig6_sig_dev.csv"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+    vad: True
+  vtest:
+    dirname: '/home/deepni/datasets/dns_wdrc/test'
+    pattern: "**/[!.]*_nearend.wav"
+    flist: "fig6_sig_test.csv"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+    vad: True
 
 ########### Multi-channel NS tasks ############
 l3das22:

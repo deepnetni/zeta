@@ -22,7 +22,7 @@ def get_datasets(name: str, conf: Optional[Dict] = None):
     cprint.y(f"using {name} dataset")
 
     train, valid, vtest = None, None, None
-    if name == "FIG6_SIG":
+    if name == "FIG6_SIG" or "FIG6small_SIG":
         train = FIG6Trunk(**conf["train"])
         valid = FIG6Trunk(**conf["valid"])
         vtest = FIG6Trunk(**conf["vtest"])

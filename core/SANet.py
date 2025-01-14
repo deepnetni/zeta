@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from einops import rearrange
 from einops.layers.torch import Rearrange
 
-from models.aia_trans import (
+from aia_trans import (
     AHAM,
     AIA_Transformer_cau,
     AIA_Transformer,
@@ -17,8 +17,7 @@ from models.aia_trans import (
     DfOutputReshapeMF,
     SPConvTranspose2d,
 )
-from models.CMGAN.conformer import ConformerBlock
-from models.CMGAN.generator import TSCB
+from cmgan_generator import TSCB
 from models.SpatialFeatures import SpatialFeats
 from models.conv_stft import STFT
 from models.multiframe import DF
@@ -2266,6 +2265,7 @@ class aia_mcse_skip_sd(nn.Module):
         x_ri = self.usLayer(x_ri)
         x_enh = self.decode(x_ri, None)  # B,1,T,F
 
+        print(x_enh.shape, en_skip.shape)
         x_enh = self.fa(x_enh, en_skip)
         x_enh = self.fu(x_enh)
         # x_enh = rearrange(x_enh, "b c t f->b 1 t f c").contiguous()

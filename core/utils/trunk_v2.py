@@ -319,6 +319,8 @@ class FIG6Trunk(TrunkBasic):
             **kwargs,
         )
 
+        self.load_vad = kwargs.get("vad", False)
+
     def __getitem__(self, index) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         el = self.f_list[index]
         f_mic, f_sph = el["f"]
@@ -335,6 +337,12 @@ class FIG6Trunk(TrunkBasic):
 
         d_mic = np.pad(d_mic[st:ed], (0, pd), "constant", constant_values=0)
         d_sph = np.pad(d_sph[st:ed], (0, pd), "constant", constant_values=0)
+
+        if self.load_vad:
+            f_vad = re.sub(r"(\w*)_nearend.wav", r"\1_vad.wav", f_mic)
+            d_vad, _ = audioread(f_vad, sub_mean=False)
+
+            d_sph = np.stack([d_sph, d_vad], axis=-1)  # T,2
 
         return (
             torch.from_numpy(d_mic).float(),
@@ -360,7 +368,11 @@ class FIG6Trunk(TrunkBasic):
 
             self.pick_idx += 1
 
-            return torch.from_numpy(d_mic).float()[None, :], torch.tensor(hl).float(), fname
+            return (
+                torch.from_numpy(d_mic).float()[None, :],
+                torch.tensor(hl).float()[None, :],
+                fname,
+            )
         else:
             raise StopIteration
 
@@ -369,25 +381,24 @@ if __name__ == "__main__":
     # from torchmetrics.functional.audio import signal_noise_ratio as SDR
 
     dset = FIG6Trunk(
-        dirname="/home/deepni/datasets/dns_wdrc/train_50",
-        flist="fig6_train.csv",
-        pattern="**/*nearend.wav",
+        dirname="/home/deepni/datasets/dns_wdrc/dev",
+        flist="../manifest/fig6_sig_dev.csv",
+        pattern="[!.]*_nearend.wav",
         keymap=("nearend.wav", "target.wav"),
-        min_len=3.0,
-        nlen=4.0,
-        fs=1,
+        # vad=True,
+        vad=True,
     )
 
-    # for a, hl, f in dset:
-    #     print(f, hl)
-    #     sys.exit()
+    mic, sph, hl = dset[0]
+    print(mic.shape, hl.shape, sph.shape)
+    sys.exit()
 
-    a = [
-        (("1.wav", "b.wav"), 10),
-        (("2.wav", "b.wav"), 10),
-        (("3.wav", "b.wav"), 10),
-        (("4.wav", "b.wav"), 10),
-    ]
+    # a = [
+    #     (("1.wav", "b.wav"), 10),
+    #     (("2.wav", "b.wav"), 10),
+    #     (("3.wav", "b.wav"), 10),
+    #     (("4.wav", "b.wav"), 10),
+    # ]
 
-    o = dset._rearange_across_files(a)
-    print(o)
+    # o = dset._rearange_across_files(a)
+    # print(o)

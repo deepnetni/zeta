@@ -9,6 +9,13 @@ class BCEFocalLoss(torch.nn.Module):
         self.reduction = reduction
 
     def forward(self, target, pt):
+        """VAD loss
+
+        :param target: B,T
+        :param pt: B,T
+        :returns: scalar value
+
+        """
         # pt: preidict true
         # pt = torch.sigmoid(_input)
         # pt = _input

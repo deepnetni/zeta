@@ -50,9 +50,7 @@ class APC_SNR_multi_filter(torch.nn.Module):
         self.stfts = torch.nn.ModuleList()
         for hop in self.multi_hop:
             self.stfts.append(
-                conv_stft.ConvSTFT(
-                    model_winlen, hop, mag_bins * 2, "hanning sqrt", "complex"
-                )
+                conv_stft.ConvSTFT(model_winlen, hop, mag_bins * 2, "hanning sqrt", "complex")
             )
 
     def forward(self, est_time_domain, clean):
@@ -79,13 +77,9 @@ class APC_SNR_multi_filter(torch.nn.Module):
 
             pmsqe_score += self.pmsqe_score(est_stft, clean_stft)
             est_scales, clean_scales = self.scaler(est_stft, clean_stft)
-            stft_scaled_snr += stft_snr(
-                est_stft * est_scales, clean_stft * clean_scales
-            )
+            stft_scaled_snr += stft_snr(est_stft * est_scales, clean_stft * clean_scales)
 
-        return stft_scaled_snr / (len(self.stfts) + 1), pmsqe_score / (
-            len(self.stfts) + 1
-        )
+        return stft_scaled_snr / (len(self.stfts) + 1), pmsqe_score / (len(self.stfts) + 1)
 
     def pmsqe_score(self, est_stft, clean_stft):
         mag_est = power(est_stft)
@@ -123,9 +117,7 @@ class APC_SNR(torch.nn.Module):
         frames = torch.zeros([mix_vad.shape[0], frame_num, self.winlen])
 
         for index in range(frame_num):
-            frames[:, index, :] = mix_vad[
-                :, index * self.hop : (index * self.hop + self.winlen)
-            ]
+            frames[:, index, :] = mix_vad[:, index * self.hop : (index * self.hop + self.winlen)]
 
         vad_frames = torch.sum(frames, dim=2, keepdim=True)
 

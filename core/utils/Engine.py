@@ -29,7 +29,7 @@ def setup_seed(seed: int = 0):
         torch.backends.cudnn.benchmark = False
     os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
-    torch.use_deterministic_algorithms(True, warn_only=True)
+    # torch.use_deterministic_algorithms(True, warn_only=True)
 
 
 setup_seed()
@@ -167,7 +167,7 @@ class Engine(_EngOpts):
     ):
         super().__init__()
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.net = net.to(self.device)
+        self.net: nn.Module = net.to(self.device)
         self.fs = kwargs.get("fs", 16000)
 
         self.optimizer = self._config_optimizer(
@@ -291,7 +291,7 @@ class Engine(_EngOpts):
 
     def _config_scheduler(self, name: str, optimizer: Optimizer):
         supported = {
-            "stepLR": lambda p: lr_scheduler.StepLR(p, step_size=10, gamma=0.9),
+            "stepLR": lambda p: lr_scheduler.StepLR(p, step_size=30, gamma=0.5),
             "reduceLR": lambda p: lr_scheduler.ReduceLROnPlateau(
                 p, mode="min", factor=0.5, patience=1
             ),
@@ -517,7 +517,8 @@ class EngineGAN(Engine):
             optimizer_name, filter(lambda p: p.requires_grad, self.net_D.parameters())
         )
         self.scheduler_D = self._config_scheduler(scheduler_name, self.optimizer_D)
-        self.post_load_ckpt()
+
+        self.post_load_ckpt() if self.ckpt_file.exists() else False
 
     def post_save_ckpt(self, ckpt_dict):
         # dict.update is a inplace operation.
@@ -547,6 +548,8 @@ class EngineGAN(Engine):
                 self.scheduler_D.step()
                 self._print("Loss", loss, i)
                 self._save_ckpt(i, is_best=False)
+
+                self.prediction_per_epoch(i)
 
             self.valid_first = False
 

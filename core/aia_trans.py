@@ -8,7 +8,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 import torch
 import torch.nn as nn
-from models.aia_net import (
+from aia_net import (
     AHAM,
     AHAM_ori,
     AIA_DCN_Transformer_merge,
@@ -50,10 +50,7 @@ class simam_module(torch.nn.Module):
         x_minus_mu_square = (x - x.mean(dim=[2, 3], keepdim=True)).pow(2)
         y = (
             x_minus_mu_square
-            / (
-                4
-                * (x_minus_mu_square.sum(dim=[2, 3], keepdim=True) / n + self.e_lambda)
-            )
+            / (4 * (x_minus_mu_square.sum(dim=[2, 3], keepdim=True) / n + self.e_lambda))
             + 0.5
         )
 
@@ -96,9 +93,7 @@ class dual_aia_complex_trans(nn.Module):
             x_com[:, -1, :, :], x_com[:, 0, :, :]
         )
         x_mag_out = (x_mag + pre_mag) / 2
-        x_r_out, x_i_out = x_mag_out * torch.cos(pre_phase), x_mag_out * torch.sin(
-            pre_phase
-        )
+        x_r_out, x_i_out = x_mag_out * torch.cos(pre_phase), x_mag_out * torch.sin(pre_phase)
         x_com_out = torch.stack((x_r_out, x_i_out), dim=1)
 
         return x_com_out
@@ -364,9 +359,7 @@ class dense_encoder_pwc(nn.Module):
       - feature_size: F of input
     """
 
-    def __init__(
-        self, in_channels: int, feature_size: int, out_channels, depth: int = 4
-    ):
+    def __init__(self, in_channels: int, feature_size: int, out_channels, depth: int = 4):
         super(dense_encoder_pwc, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -421,9 +414,7 @@ class dense_encoder(nn.Module):
       - feature_size: F of input
     """
 
-    def __init__(
-        self, in_channels: int, feature_size: int, out_channels, depth: int = 4
-    ):
+    def __init__(self, in_channels: int, feature_size: int, out_channels, depth: int = 4):
         super(dense_encoder, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -437,9 +428,7 @@ class dense_encoder(nn.Module):
             nn.LayerNorm(feature_size),
             nn.PReLU(out_channels),
         )
-        self.enc_dense = DenseBlock(
-            depth=depth, in_channels=out_channels, input_size=feature_size
-        )
+        self.enc_dense = DenseBlock(depth=depth, in_channels=out_channels, input_size=feature_size)
 
         self.post_conv = nn.Sequential(
             nn.Conv2d(
@@ -510,9 +499,7 @@ class dense_encoder_mag(nn.Module):
 
 
 class dense_decoder_pwc(nn.Module):
-    def __init__(
-        self, in_channels: int, out_channels: int, feature_size: int, depth: int = 4
-    ):
+    def __init__(self, in_channels: int, out_channels: int, feature_size: int, depth: int = 4):
         super(dense_decoder_pwc, self).__init__()
         self.in_channels = in_channels
         self.dec_dense = DenseBlockPWC(
@@ -563,15 +550,11 @@ class dense_decoder_pwc(nn.Module):
 
 
 class dense_decoder(nn.Module):
-    def __init__(
-        self, in_channels: int, out_channels: int, feature_size: int, depth: int = 4
-    ):
+    def __init__(self, in_channels: int, out_channels: int, feature_size: int, depth: int = 4):
         super(dense_decoder, self).__init__()
         self.out_channels = 1
         self.in_channels = in_channels
-        self.dec_dense = DenseBlock(
-            depth=depth, in_channels=in_channels, input_size=feature_size
-        )
+        self.dec_dense = DenseBlock(depth=depth, in_channels=in_channels, input_size=feature_size)
 
         self.dec_conv1 = nn.Sequential(
             nn.ConstantPad2d((1, 1, 0, 0), value=0.0),  # padding F
@@ -669,9 +652,7 @@ class SPConvTranspose2d(nn.Module):  # sub-pixel convolution
         # Upsampling using sub pixel layers
         super(SPConvTranspose2d, self).__init__()
         self.out_channels = out_channels
-        self.conv = nn.Conv2d(
-            in_channels, out_channels * r, kernel_size=kernel_size, stride=(1, 1)
-        )
+        self.conv = nn.Conv2d(in_channels, out_channels * r, kernel_size=kernel_size, stride=(1, 1))
         self.r = r
 
     def forward(self, x):
@@ -969,9 +950,7 @@ class Fusion_F(nn.Module):
         )
 
         self.layer_global = nn.Sequential(
-            nn.AvgPool2d(
-                kernel_size=(1, feature_size), stride=(1, feature_size)
-            ),  # B,C,T,1
+            nn.AvgPool2d(kernel_size=(1, feature_size), stride=(1, feature_size)),  # B,C,T,1
             # B,C,T,1
             nn.Conv2d(
                 in_channels=mid_channels,
@@ -1176,9 +1155,7 @@ class DF_AIA_TRANS_AE_F(nn.Module):
 
         self.df_order = 5
         self.df_bins = feature_size
-        self.DF_de = DF_dense_decoder(
-            mid_channels, feature_size // 4, 2 * self.df_order
-        )
+        self.DF_de = DF_dense_decoder(mid_channels, feature_size // 4, 2 * self.df_order)
 
         self.df_op = DF(num_freqs=self.df_bins, frame_size=self.df_order, lookahead=0)
 
@@ -1322,9 +1299,7 @@ class DF_AIA_TRANS_AELOSS(nn.Module):
 
         self.df_order = 5
         self.df_bins = feature_size
-        self.DF_de = DF_dense_decoder(
-            mid_channels, feature_size // 4, 2 * self.df_order
-        )
+        self.DF_de = DF_dense_decoder(mid_channels, feature_size // 4, 2 * self.df_order)
 
         self.df_op = DF(num_freqs=self.df_bins, frame_size=self.df_order, lookahead=0)
 
@@ -1471,9 +1446,7 @@ class DF_AIA_TRANS_AE(nn.Module):
 
         self.df_order = 5
         self.df_bins = feature_size
-        self.DF_de = DF_dense_decoder(
-            mid_channels, feature_size // 4, 2 * self.df_order
-        )
+        self.DF_de = DF_dense_decoder(mid_channels, feature_size // 4, 2 * self.df_order)
 
         self.df_op = DF(num_freqs=self.df_bins, frame_size=self.df_order, lookahead=0)
 
@@ -1575,9 +1548,7 @@ class AIA_TRANS(nn.Module):
 
         self.df_order = 5
         self.df_bins = feature_size
-        self.DF_de = DF_dense_decoder(
-            mid_channels, feature_size // 4, 2 * self.df_order
-        )
+        self.DF_de = DF_dense_decoder(mid_channels, feature_size // 4, 2 * self.df_order)
 
         self.df_op = DF(num_freqs=self.df_bins, frame_size=self.df_order, lookahead=0)
 
@@ -1695,9 +1666,7 @@ class DF_AIA_TRANS(nn.Module):
 
         self.df_order = 5
         self.df_bins = feature_size
-        self.DF_de = DF_dense_decoder(
-            mid_channels, feature_size // 4, 2 * self.df_order
-        )
+        self.DF_de = DF_dense_decoder(mid_channels, feature_size // 4, 2 * self.df_order)
 
         self.df_op = DF(num_freqs=self.df_bins, frame_size=self.df_order, lookahead=0)
 
@@ -1815,9 +1784,7 @@ class DF_AIA_TRANS_densepwc(nn.Module):
 
         self.df_order = 5
         self.df_bins = feature_size
-        self.DF_de = DF_dense_decoder(
-            mid_channels, feature_size // 4, 2 * self.df_order
-        )
+        self.DF_de = DF_dense_decoder(mid_channels, feature_size // 4, 2 * self.df_order)
 
         self.df_op = DF(num_freqs=self.df_bins, frame_size=self.df_order, lookahead=0)
 
@@ -1896,9 +1863,7 @@ class dual_aia_trans_chime(nn.Module):
         )  # B, mid_c, T, F // 4
 
         self.en_mag = dense_encoder_mag(mid_channels)
-        self.aia_trans_merge = AIA_Transformer_merge(
-            mid_channels * 2, mid_channels, num_layers=4
-        )
+        self.aia_trans_merge = AIA_Transformer_merge(mid_channels * 2, mid_channels, num_layers=4)
         self.aham = AHAM_ori(input_channel=mid_channels)
         self.aham_mag = AHAM_ori(input_channel=mid_channels)
 

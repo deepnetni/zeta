@@ -1,16 +1,16 @@
 import numpy as np
 import torch
 
+n_fft = 11
+GD_matrix = (
+    torch.ones(n_fft // 2 + 1, n_fft // 2 + 1).triu(1)
+    - torch.triu(torch.ones(n_fft // 2 + 1, n_fft // 2 + 1), diagonal=2)
+    - torch.eye(n_fft // 2 + 1)
+)
+print(GD_matrix)
 
-# a = np.random.randint(0, 1)
-# print(a)
-# a = np.random.choice(np.arange(3), p=[0.1, 0.6, 0.3])
-# print(a)
-print(np.random.uniform(-1, -3))
 
-
-a = torch.randn(4, 5)
-b = torch.tensor([3, 5, 5, 4])
-
-c = torch.min(torch.ones_like(b) * a.shape[-1], b)
-print(c)
+a = torch.randn(1, 2, 3, 4)
+b, _ = a.chunk(2, dim=1)
+c, _ = a.chunk(2, dim=3)
+print(b.shape, c.shape)

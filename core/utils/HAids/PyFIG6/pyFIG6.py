@@ -361,10 +361,10 @@ def FIG6_compensation_vad(HL, inp, fs=16000, nframe=128, nhop=64):
 if __name__ == "__main__":
     import soundfile as sf
 
-    HL = [70, 70, 70, 75, 85, 85]
+    HL = [50, 60, 70, 75, 85, 95]
     # src = np.random.randn(1600)
     # src = np.ones(1600)
-    src, fs = sf.read("/home/deepni/datasets/dnsc/dnsc_clean/clean_fileid_0.wav")
+    src, fs = sf.read("/home/deepni/datasets/dns_wdrc/test/0_enlarge_nearend.wav")
     out = FIG6_compensation(HL, src)
     print(out.shape, src.shape)
     # sf.write("out.wav", out, fs)

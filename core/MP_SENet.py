@@ -185,7 +185,10 @@ def phase_losses(phase_r, phase_g):
         anti_wrapping_function(torch.diff(phase_r, dim=2) - torch.diff(phase_g, dim=2))
     )
 
-    return ip_loss, gd_loss, iaf_loss
+    phase_loss = ip_loss + gd_loss + iaf_loss
+    return phase_loss, dict(
+        ip_loss=ip_loss.detach(), gd_loss=gd_loss.detach(), iaf_loss=iaf_loss.detach()
+    )
 
 
 def anti_wrapping_function(x):

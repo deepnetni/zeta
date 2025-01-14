@@ -1,12 +1,9 @@
 import argparse
 import os
 from pathlib import Path
-import json
 
 import librosa
 import numpy as np
-import soundfile as sf
-from tqdm import tqdm
 from utils.mp_decoder import mpMap, mpStarMap
 from utils.audiolib import audioread, audiowrite
 from utils.vad import VAD
@@ -28,7 +25,8 @@ def worker(src, dst, args):
 
     d_vad = vad_detect.vad_waves(d)
     N = d_vad.shape[-1]
-    vad = np.stack([d[:N], d_vad], axis=-1)
+    # vad = np.stack([d[:N], d_vad], axis=-1)
+    vad = d_vad.astype(np.float32)
     audiowrite(dst, vad, fs)
 
 
@@ -38,18 +36,9 @@ def parse():
         "\n\nExample: python concat_speech.py --src xx --out yy",
         formatter_class=argparse.RawTextHelpFormatter,
     )
-    parser.add_argument(
-        "--src",
-        help="src file or directory",
-        type=str,
-        default="",
-    )
-    parser.add_argument(
-        "--out",
-        help="out file or directory",
-        type=str,
-        default="",
-    )
+    parser.add_argument("--src", help="src file or directory", type=str, default="")
+    parser.add_argument("--pattern", help="src file pattern", type=str, default="*.wav")
+    parser.add_argument("--out", help="out file or directory", type=str, default="")
     parser.add_argument("--fs", help="sample rate", type=int, default=16000)
     args = parser.parse_args()
 
@@ -64,9 +53,10 @@ if __name__ == "__main__":
     if os.path.isfile(args.src):
         worker([args.src], [args.out], args=args)
     elif os.path.isdir(args.src):
-        flist = list(map(str, Path(args.src).rglob("**/*.wav")))
-        olist = list(map(lambda f: f.replace(args.src, args.out), flist))
-        # print(flist[0], olist[0])
+        flist = list(map(str, Path(args.src).rglob(args.pattern)))
+        # olist = list(map(lambda f: f.replace(args.src, args.out), flist))
+        olist = list(map(lambda f: f.replace("src.wav", "vad.wav"), flist))
+        print(flist[0], olist[0])
         worker(flist, olist, args=args)
     else:
         raise RuntimeError("")
