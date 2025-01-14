@@ -9,8 +9,9 @@ import numpy as np
 from typing import Dict
 
 from .wdrc_transforms import TransConfig, apply_gain, transform_pipline
-from utils.HAids.wdrc import wdrc_process
-from utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation, FIG6_compensation_vad
+
+# from utils.HAids.wdrc import wdrc_process
+from utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation_vad
 from utils.vad import VAD
 
 
@@ -212,7 +213,7 @@ class Synthesizer:
             # )
             self.self_datasets = None
 
-        # self.vad_detect = VAD(10, self.cfg["onlinesynth_sampling_rate"], level=2)
+        self.vad_detect = VAD(10, self.cfg["onlinesynth_sampling_rate"], level=2)
         self.transforms = [apply_gain]
 
         self.fig6_cfg = self.cfg["fig6_compensation_conf"]
@@ -267,15 +268,16 @@ class Synthesizer:
                 x_transform, info = transform_pipline(
                     x_src, self.transforms, TransConfig(gain_duration=None)
                 )
-                # self.vad_detect.reset()
-                # x_vad = np.ones_like(x_src) * 0.95
-                # vad_lbl = self.vad_detect.vad_waves(x_src)  # T,
-                # x_vad[: len(vad_lbl)] = vad_lbl
                 if x_transform is not None:
                     break
         else:
             raise ValueError("Unsupported nearend duration value!")
 
+        self.vad_detect.reset()
+        x_vad = self.vad_detect.vad_waves(x_src)  # T,
+        N = len(x_vad)
+        x_src = x_src[:N]
+        x_transform = x_transform[:N]
         x_nearend = x_transform.copy()
 
         if random.random() < self.cfg.get("onlinesynth_nearend_apply_gain_change", 0.0):
@@ -333,6 +335,7 @@ class Synthesizer:
             self.fig6_cfg["sample_rate"],
             self.fig6_cfg["nframe"],
             self.fig6_cfg["nhop"],
+            x_vad,
         )
 
         x_nearend_fig6 = FIG6_compensation_vad(
@@ -374,8 +377,7 @@ class Synthesizer:
             nearend_fig6=x_nearend_fig6,
             noise=x_noise,
             info=info,
-            # vad=x_vad,
-            # target_vad=x_target_vad,
+            vad=x_vad,
         )
         return output
 

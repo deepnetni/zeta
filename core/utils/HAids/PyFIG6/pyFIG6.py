@@ -347,12 +347,15 @@ def FIG6_compensation(HL, inp, fs=16000, nframe=128, nhop=64):
     return x.squeeze()
 
 
-def FIG6_compensation_vad(HL, inp, fs=16000, nframe=128, nhop=64):
-    vad_detect = VAD(10, fs, level=2)
-    vad_detect.reset()
-    x_vad = np.ones_like(inp) * 0.95
-    vad_lbl = vad_detect.vad_waves(inp)  # T,
-    x_vad[: len(vad_lbl)] = vad_lbl
+def FIG6_compensation_vad(HL, inp, fs=16000, nframe=128, nhop=64, vad=None):
+    if vad is None:
+        vad_detect = VAD(10, fs, level=2)
+        vad_detect.reset()
+        x_vad = np.ones_like(inp) * 0.95
+        vad_lbl = vad_detect.vad_waves(inp)  # T,
+        x_vad[: len(vad_lbl)] = vad_lbl
+    else:
+        x_vad = vad
     comp = FIG6_compensation(HL, inp, fs, nframe, nhop)
     comp = np.where(x_vad > 0.5, comp, inp)
     return comp

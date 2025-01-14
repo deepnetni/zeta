@@ -381,7 +381,7 @@ if __name__ == "__main__":
     # from torchmetrics.functional.audio import signal_noise_ratio as SDR
 
     dset = FIG6Trunk(
-        dirname="/home/deepni/datasets/dns_wdrc/dev",
+        dirname="/home/deepnetni/trunk/dns_wdrc/dev",
         flist="../manifest/fig6_sig_dev.csv",
         pattern="[!.]*_nearend.wav",
         keymap=("nearend.wav", "target.wav"),

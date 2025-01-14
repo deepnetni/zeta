@@ -29,7 +29,7 @@ class Eng_conf:
     name: str = "baseline_fig6"
     epochs: int = 70
     desc: str = ""
-    info_dir: str = r"/home/deepni/model_results_trunk/FIG6/trained_fig6_GAN"
+    info_dir: str = r"/home/deepnetni/model_results_trunk/FIG6/trained_fig6_GAN"
     resume: bool = True
     optimizer_name: str = "adam"
     scheduler_name: str = "stepLR"

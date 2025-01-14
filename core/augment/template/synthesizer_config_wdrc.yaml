@@ -19,12 +19,12 @@ fig6_compensation_conf:
 onlinesynth_nearend_datasets:
   dns:
     weight: 1.0
-    dir: '/home/deepni/disk/DNS-Challenge/datasets/clean'
+    dir: '/home/deepnetni/disk/DNS-Challenge/datasets/clean'
 
 onlinesynth_nearend_noises:
   dns_challenge:
     weight: 1.0
-    dir: '/home/deepni/disk/DNS-Challenge/datasets/noise'
+    dir: '/home/deepnetni/disk/DNS-Challenge/datasets/noise'
   noise_92:
     weight: 0.0
     dir: '/home/deepni/disk/noise_92'
