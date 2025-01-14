@@ -32,7 +32,7 @@ def work(filenum: int, yaml, outdir, fs):
     sf.write(f"{outdir}/{filenum}_{mode}_nearend.wav", audio["nearend"], fs)
     sf.write(f"{outdir}/{filenum}_{mode}_nearend_fig6.wav", audio["nearend_fig6"], fs)
     target = audio["target"] - audio["target"].mean()
-    target = np.stack([target, audio["vad"]])  # T,2
+    target = np.stack([target, audio["vad"]], axis=-1)  # T,2
     sf.write(f"{outdir}/{filenum}_{mode}_target.wav", target, fs)
 
     # sf.write(

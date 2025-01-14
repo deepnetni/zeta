@@ -15,13 +15,13 @@ from core.Trainer_wGAN_for_fig6 import (
     Trainer,
     TrainerMultiOutputs,
     TrainerGumbelCodebook,
-    TrainerPhase,
 )
 from core.Trainer_wGAN_VAD_for_fig6 import TrainerVAD
 from core.utils.audiolib import audioread, audiowrite
 from core.utils.ini_opts import read_ini
 from core.utils.logger import cprint
 from core.utils.register import tables
+from pathlib import Path
 
 
 @dataclass
@@ -29,7 +29,7 @@ class Eng_conf:
     name: str = "baseline_fig6"
     epochs: int = 70
     desc: str = ""
-    info_dir: str = r"/home/deepnetni/model_results_trunk/FIG6/trained_fig6_GAN"
+    info_dir: str = f"{Path.home()}/model_results_trunk/FIG6/trained_fig6_GAN"
     resume: bool = True
     optimizer_name: str = "adam"
     scheduler_name: str = "stepLR"
@@ -39,7 +39,7 @@ class Eng_conf:
     vtest_outdir: str = "vtest"
     dsets_raw_metrics: str = "dset_metrics.json"
 
-    train_batch_sz: int = 6
+    train_batch_sz: int = 4
     train_num_workers: int = 16
     valid_batch_sz: int = 18
     valid_num_workers: int = 16
@@ -52,7 +52,7 @@ class Model_conf:
     nframe: int = 512
     nhop: int = 256
     mid_channel: int = 48
-    conformer_num: int = 2
+    conformer_num: int = 4
 
 
 @dataclass
@@ -135,6 +135,12 @@ if __name__ == "__main__":
     md_conf = cfg["md_conf"]
     md_name = cfg["config"]["name"]
 
+    if args.small:
+        train_dset, valid_dset, vtest_dset = get_datasets("FIG6small_SIG")
+        # train_dset, valid_dset, vtest_dset = get_datasets("FIG6smallVad_SIG")
+    else:
+        train_dset, valid_dset, vtest_dset = get_datasets("FIG6_SIG")
+
     if md_name in [
         "baseline_fig6",
         "condConformer",
@@ -147,6 +153,7 @@ if __name__ == "__main__":
         Trainer = TrainerGumbelCodebook
     elif "baseline_fig6_vad" == md_name:
         Trainer = TrainerVAD
+        train_dset, valid_dset, vtest_dset = get_datasets("FIG6smallVad_SIG")
     else:
         Trainer = TrainerMultiOutputs
 
@@ -156,12 +163,6 @@ if __name__ == "__main__":
     model = tables.models.get(md_name)
     assert model is not None
     net = model(**md_conf)
-
-    if args.small:
-        # train_dset, valid_dset, vtest_dset = get_datasets("FIG6small_SIG")
-        train_dset, valid_dset, vtest_dset = get_datasets("FIG6smallVad_SIG")
-    else:
-        train_dset, valid_dset, vtest_dset = get_datasets("FIG6_SIG")
 
     if args.train:
         init = cfg["config"]

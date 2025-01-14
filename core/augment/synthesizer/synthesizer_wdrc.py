@@ -274,10 +274,9 @@ class Synthesizer:
             raise ValueError("Unsupported nearend duration value!")
 
         self.vad_detect.reset()
-        x_vad = self.vad_detect.vad_waves(x_src)  # T,
-        N = len(x_vad)
-        x_src = x_src[:N]
-        x_transform = x_transform[:N]
+        x_vad = np.ones_like(x_src)
+        d_vad = self.vad_detect.vad_waves(x_src)  # T,
+        x_vad[: len(d_vad)] = d_vad
         x_nearend = x_transform.copy()
 
         if random.random() < self.cfg.get("onlinesynth_nearend_apply_gain_change", 0.0):
