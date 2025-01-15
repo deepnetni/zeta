@@ -27,7 +27,12 @@ def worker(src, dst, args):
     N = d_vad.shape[-1]
     # vad = np.stack([d[:N], d_vad], axis=-1)
     vad = d_vad.astype(np.float32)
-    audiowrite(dst, vad, fs)
+    if dst is not None:
+        d_, fs = audioread(dst)
+        vad = np.stack([d_, vad], axis=-1)
+        audiowrite(dst, vad, fs)
+    else:
+        audiowrite(dst, vad, fs)
 
 
 def parse():
@@ -55,8 +60,7 @@ if __name__ == "__main__":
     elif os.path.isdir(args.src):
         flist = list(map(str, Path(args.src).rglob(args.pattern)))
         # olist = list(map(lambda f: f.replace(args.src, args.out), flist))
-        olist = list(map(lambda f: f.replace("src.wav", "vad.wav"), flist))
-        print(flist[0], olist[0])
+        olist = list(map(lambda f: f.replace("src.wav", "target.wav"), flist))
         worker(flist, olist, args=args)
     else:
         raise RuntimeError("")

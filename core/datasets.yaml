@@ -2,8 +2,9 @@
 FIG6:
   # SIG Challenge Script dataset
   train:
-    dirname: '/home/deepni/datasets/dns_wdrc/train_50'
-    flist: "fig6_sig_train.csv"
+    # dirname: '/home/deepni/datasets/dns_wdrc/train_100'
+    dirname: '/home/deepnetni/trunk/dns_wdrc/train_100'
+    flist: "fig6_sig_train_100.csv"
     pattern: '[!.]*_nearend.wav'
     keymap:
        - "nearend.wav"
@@ -11,19 +12,53 @@ FIG6:
     nlen: 5.0
     min_len: 1.0
   valid:
-    dirname: '/home/deepni/datasets/dns_wdrc/dev'
+    # dirname: '/home/deepni/datasets/dns_wdrc/dev_vad'
+    dirname: '/home/deepnetni/trunk/dns_wdrc/dev_vad'
     pattern: "**/[!.]*_nearend.wav"
-    flist: "fig6_sig_dev.csv"
+    flist: "fig6_sig_dev_vad.csv"
     keymap:
        - "nearend.wav"
        - "target.wav"
   vtest:
-    dirname: '/home/deepni/datasets/dns_wdrc/test'
+    # dirname: '/home/deepni/datasets/dns_wdrc/dns_testset_noverb'
+    dirname: '/home/deepnetni/trunk/dns_wdrc/dns_testset_noverb'
     pattern: "**/[!.]*_nearend.wav"
-    flist: "fig6_sig_test.csv"
+    flist: "fig6_sig_dns_test.csv"
     keymap:
        - "nearend.wav"
        - "target.wav"
+
+FIG6Vad:
+  # SIG Challenge Script dataset
+  train:
+    # dirname: '/home/deepni/datasets/dns_wdrc/train_100'
+    dirname: '/home/deepnetni/trunk/dns_wdrc/train_100'
+    flist: "fig6_sig_train_100.csv"
+    pattern: '[!.]*_nearend.wav'
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+    nlen: 5.0
+    min_len: 1.0
+    vad: True
+  valid:
+    # dirname: '/home/deepni/datasets/dns_wdrc/dev_vad'
+    dirname: '/home/deepnetni/trunk/dns_wdrc/dev_vad'
+    pattern: "**/[!.]*_nearend.wav"
+    flist: "fig6_sig_dev_vad.csv"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+    vad: True
+  vtest:
+    # dirname: '/home/deepni/datasets/dns_wdrc/dns_testset_noverb'
+    dirname: '/home/deepnetni/trunk/dns_wdrc/dns_testset_noverb'
+    pattern: "**/[!.]*_nearend.wav"
+    flist: "fig6_sig_dns_test.csv"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+    vad: True
 
 FIG6small:
   # SIG Challenge Script dataset

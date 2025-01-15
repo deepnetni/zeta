@@ -5,27 +5,28 @@ import sys
 from pathlib import Path
 
 import librosa
+import soundfile as sf
 
 sys.path.append(str(Path(__file__).parent.parent))
 
+import ast
+import json
 import random
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
-import json
-import ast
 
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
-from torch.nn.utils.rnn import pad_packed_sequence, pad_sequence, pack_padded_sequence
-
-from utils.audiolib import audioread
-from utils.gcc_phat import gcc_phat
-from utils.logger import get_logger
 from models.conv_stft import STFT
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, pad_sequence
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
-from utils.register import tables
+
+from core.utils.audiolib import audioread
+from core.utils.gcc_phat import gcc_phat
+from core.utils.logger import get_logger
+from core.utils.register import tables
 
 
 def clip_to_shortest(batch: List):
@@ -332,17 +333,19 @@ class FIG6Trunk(TrunkBasic):
             hl = ast.literal_eval(ctx["HL"])
 
         d_mic, fs_1 = audioread(f_mic, sub_mean=True)
-        d_sph, fs_2 = audioread(f_sph, sub_mean=True)
+        d_sph, fs_2 = audioread(f_sph)  # T,2
+        # d_sph, fs_2 = sf.read(f_sph)  # T,2
         assert fs_1 == fs_2
 
         d_mic = np.pad(d_mic[st:ed], (0, pd), "constant", constant_values=0)
-        d_sph = np.pad(d_sph[st:ed], (0, pd), "constant", constant_values=0)
+        # padding inner first
+        d_sph = np.pad(d_sph[st:ed, :], ((0, pd), (0, 0)), "constant", constant_values=0)
 
-        if self.load_vad:
-            f_vad = re.sub(r"(\w*)_nearend.wav", r"\1_vad.wav", f_mic)
-            d_vad, _ = audioread(f_vad, sub_mean=False)
-
-            d_sph = np.stack([d_sph, d_vad], axis=-1)  # T,2
+        if not self.load_vad:
+            # f_vad = re.sub(r"(\w*)_nearend.wav", r"\1_vad.wav", f_mic)
+            # d_vad, _ = audioread(f_vad, sub_mean=False)
+            # d_sph = np.stack([d_sph, d_vad], axis=-1)  # T,2
+            d_sph = d_sph[..., 0]
 
         return (
             torch.from_numpy(d_mic).float(),

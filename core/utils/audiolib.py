@@ -174,7 +174,7 @@ def align_ref_to_mic(d_ref: np.ndarray, d_mic: np.ndarray, fs: int = 16000) -> n
     return d_ref
 
 
-def audioread(path, sub_mean=True, start=0, stop=None, target_level: Optional[int] = None):
+def audioread(path, sub_mean=False, start=0, stop=None, target_level: Optional[int] = None):
     """Function to read audio
     Args:
         target_level: None,int, normalize the power of data to `target_level`, default None, could be -25 dB;

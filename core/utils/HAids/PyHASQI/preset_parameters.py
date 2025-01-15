@@ -1,7 +1,7 @@
 import os
 import numpy as np
 
-from eb_operations import *
+from .eb_operations import *
 
 
 def pre_compute_params(nchan, length, fs, cfreq):
@@ -27,6 +27,25 @@ def pre_compute_params(nchan, length, fs, cfreq):
     return coscf_total, sincf_total
 
 
+def generate_filter_params(lenx):
+    nchan = 12
+    cfreq = eb_CenterFreq(nchan)
+    shift = 0.02
+    cfreq1 = eb_CenterFreq(nchan, shift)
+    fsamp = 24000
+
+    Env2_coscf_total, Env2_sincf_total = pre_compute_params(nchan, lenx, fsamp, cfreq1)
+    BM2_coscf_total, BM2_sincf_total = pre_compute_params(nchan, lenx, fsamp, cfreq)
+
+    base_dir = os.path.dirname(__file__)
+
+    np.savez(f"{base_dir}/Env2_coscf.npz", Env2_coscf=Env2_coscf_total)
+    np.savez(f"{base_dir}/Env2_sincf.npz", Env2_sincf=Env2_sincf_total)
+
+    np.savez(f"{base_dir}/BM2_coscf.npz", BM2_coscf=BM2_coscf_total)
+    np.savez(f"{base_dir}/BM2_sincf.npz", BM2_sincf=BM2_sincf_total)
+
+
 if __name__ == "__main__":
     import soundfile
 
@@ -42,7 +61,8 @@ if __name__ == "__main__":
     # lenx = 71808
     # lenx = 144000
     # lenx = 120000
-    lenx = 119808
+    # lenx = 119808
+    lenx = 240000
 
     Env2_coscf_total, Env2_sincf_total = pre_compute_params(nchan, lenx, fsamp, cfreq1)
     BM2_coscf_total, BM2_sincf_total = pre_compute_params(nchan, lenx, fsamp, cfreq)

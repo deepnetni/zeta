@@ -18,7 +18,6 @@ from tqdm import tqdm
 from core.Trainer_wGAN_for_fig6 import Trainer
 from core.utils.focal_loss import BCEFocalLoss
 from core.utils.record import REC
-from core.Trainer_wGAN_for_fig6 import Trainer
 
 
 def vad_to_frames(vad: Tensor, nframe: int, nhop: int):

@@ -10,6 +10,7 @@ import torch.nn.functional as F
 from joblib import Parallel, delayed
 from torch import Tensor
 from torch.nn.utils.rnn import pad_sequence
+from torch.optim import Optimizer, lr_scheduler
 from torch.utils.data import DataLoader, Dataset
 from torchmetrics.functional.audio.sdr import signal_distortion_ratio as SDR
 from tqdm import tqdm
@@ -27,6 +28,7 @@ from core.utils.losses import loss_phase, loss_pmsqe
 from core.utils.record import REC
 from core.utils.stft_loss import MultiResolutionSTFTLoss
 from core.utils.trunk_v2 import FIG6Trunk
+from core.utils.HAids.PyHASQI.preset_parameters import generate_filter_params
 
 
 def pad_to_longest(batch):
@@ -131,6 +133,15 @@ class Trainer(EngineGAN):
             hops=[8, 16, 32, 64],
         ).to(self.device)
 
+    def _config_scheduler(self, name: str, optimizer: Optimizer):
+        supported = {
+            "stepLR": lambda p: lr_scheduler.StepLR(p, step_size=10, gamma=0.5),
+            "reduceLR": lambda p: lr_scheduler.ReduceLROnPlateau(
+                p, mode="min", factor=0.5, patience=1
+            ),
+        }
+        return supported[name](optimizer)
+
     def batch_hasqi_score(self, sph, est, HL):
         if isinstance(sph, torch.Tensor):
             sph = sph.cpu().detach().numpy()
@@ -158,12 +169,14 @@ class Trainer(EngineGAN):
         metric_rec = REC()
         pbar = tqdm(
             self.valid_loader,
-            ncols=300,
+            # ncols=300,
             leave=False,
             desc=f"v-{self.valid_dset.dirname}",
         )
 
+        generate_filter_params(119808)
         for mic, sph, hl, nlen in pbar:
+            # print(mic.shape, sph.shape, hl.shape, nlen.shape)
             mic = mic.to(self.device)  # B,T; mic data
             sph = sph.to(self.device)  # B,T; clean + compensation
             nlen = self.stft.nLen(nlen).to(self.device)  # B,
@@ -198,11 +211,12 @@ class Trainer(EngineGAN):
         metric_rec = REC()
         pbar = tqdm(
             self.vtest_loader,
-            ncols=300,
+            # ncols=300,
             leave=False,
             desc=f"v-{self.vtest_dset.dirname}",
         )
 
+        generate_filter_params(240000)
         for mic, sph, hl, nlen in pbar:
             mic = mic.to(self.device)  # B,T,6
             sph = sph.to(self.device)  # b,c,t,f
@@ -508,6 +522,8 @@ class Trainer(EngineGAN):
             leave=True,
             desc=f"Epoch-{epoch}/{self.epochs}",
         )
+
+        generate_filter_params(119808)
         for mic, sph, HL in pbar:
             mic = mic.to(self.device)  # B,T
             sph = sph.to(self.device)  # B,T
@@ -599,6 +615,7 @@ class Trainer(EngineGAN):
         # vtest_outdir = os.path.join(self.vtest_outdir, dirname)
         # shutil.rmtree(vtest_outdir) if os.path.exists(vtest_outdir) else None
 
+        generate_filter_params(240000)
         for mic, sph, HL, nlen in pbar:
             mic = mic.to(self.device)  # B,T,6
             sph = sph.to(self.device)  # b,c,t,f

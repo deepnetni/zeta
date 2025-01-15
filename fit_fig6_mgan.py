@@ -27,23 +27,23 @@ from pathlib import Path
 @dataclass
 class Eng_conf:
     name: str = "baseline_fig6"
-    epochs: int = 70
+    epochs: int = 30
     desc: str = ""
-    info_dir: str = f"{Path.home()}/model_results_trunk/FIG6/trained_fig6_GAN"
+    info_dir: str = f"{Path.home()}/model_results_trunk/FIG6/fig6_GAN"
     resume: bool = True
     optimizer_name: str = "adam"
     scheduler_name: str = "stepLR"
     valid_per_epoch: int = 1
-    vtest_per_epoch: int = 5  # 0 for disabled
+    vtest_per_epoch: int = 1  # 0 for disabled
     ## the output dir to store the predict files of `vtest_dset` during testing
     vtest_outdir: str = "vtest"
     dsets_raw_metrics: str = "dset_metrics.json"
 
-    train_batch_sz: int = 4
-    train_num_workers: int = 16
-    valid_batch_sz: int = 18
+    train_batch_sz: int = 6
+    train_num_workers: int = 8
+    valid_batch_sz: int = 12  # 12
     valid_num_workers: int = 16
-    vtest_batch_sz: int = 18
+    vtest_batch_sz: int = 12  # 12
     vtest_num_workers: int = 16
 
 
@@ -52,7 +52,7 @@ class Model_conf:
     nframe: int = 512
     nhop: int = 256
     mid_channel: int = 48
-    conformer_num: int = 4
+    conformer_num: int = 2
 
 
 @dataclass
@@ -122,7 +122,7 @@ if __name__ == "__main__":
     args = parse()
 
     if args.print:
-        tables.print() if args.train else None
+        tables.print()
         sys.exit()
 
     if args.conf is not None and args.conf != "":
@@ -149,9 +149,9 @@ if __name__ == "__main__":
     ]:
         Trainer = Trainer
         # Trainer = TrainerPhase
-    elif "GumbelCodebook" in md_name:
+    elif md_name == "GumbelCodebook":
         Trainer = TrainerGumbelCodebook
-    elif "baseline_fig6_vad" == md_name:
+    elif md_name == "baseline_fig6_vad":
         Trainer = TrainerVAD
         train_dset, valid_dset, vtest_dset = get_datasets("FIG6smallVad_SIG")
     else:

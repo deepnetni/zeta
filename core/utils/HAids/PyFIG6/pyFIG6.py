@@ -1,11 +1,12 @@
 import sys
 
 sys.path.append(__file__.rsplit("/", 4)[0])
+
 import numpy as np
-from scipy.signal import get_window
+from librosa import istft, stft
 from scipy.interpolate import interp1d
-from librosa import stft, istft
-from utils.vad import VAD
+from scipy.signal import get_window
+from core.utils.vad import VAD
 
 
 def HL_LinearFitting(src, freq, ht, hearingNum):

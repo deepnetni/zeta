@@ -98,11 +98,11 @@ def lpcoeff(speech_frame, model_order):
         else:
             a_past = a[:i]
             sum_term = np.sum(a_past * np.array(R[i:0:-1]))
-        # with warnings.catch_warnings():
-        #     warnings.filterwarnings(
-        #         "ignore", message="invalid value encountered in scalar divide"
-        #     )
-        rcoeff[i] = (R[i + 1] - sum_term) / E[i]
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="invalid value encountered in double_scalars")
+            rcoeff[i] = (R[i + 1] - sum_term) / E[i]
+
         a[i] = rcoeff[i]
         if i > 0:
             a[:i] = a_past[:i] - rcoeff[i] * a_past[::-1]
