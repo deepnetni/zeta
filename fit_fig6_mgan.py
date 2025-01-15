@@ -39,11 +39,11 @@ class Eng_conf:
     vtest_outdir: str = "vtest"
     dsets_raw_metrics: str = "dset_metrics.json"
 
-    train_batch_sz: int = 6
-    train_num_workers: int = 8
+    train_batch_sz: int = 8
+    train_num_workers: int = 16
     valid_batch_sz: int = 12  # 12
     valid_num_workers: int = 16
-    vtest_batch_sz: int = 6  # 12
+    vtest_batch_sz: int = 4  # 12
     vtest_num_workers: int = 16
 
 
@@ -75,6 +75,7 @@ def parse():
         "--root_save_dir", help="root directory of all results", type=str
     )
     parser.add_argument("--valid_first", help="valid first", action="store_true")
+    parser.add_argument("--vtest_first", help="valid first", action="store_true")
 
     parser.add_argument("--valid", help="input directory", action="store_true")
     parser.add_argument("--vtest", help="input directory", action="store_true")
@@ -175,6 +176,7 @@ if __name__ == "__main__":
             net=net,
             net_D=Discriminator(ndf=16),
             valid_first=args.valid_first,
+            vtest_first=args.vtest_first,
             root_save_dir=args.root_save_dir,
             **init,
         )

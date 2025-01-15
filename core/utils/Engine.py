@@ -199,6 +199,7 @@ class Engine(_EngOpts):
         self.ckpt_file = self.ckpt_dir / "ckpt.pth"
         self.ckpt_best_file = self.ckpt_dir / "best.pth"
         self.valid_first = valid_first
+        self.vtest_first = kwargs.get("vtest_first", False)
         self.dsets_mfile = (
             self.info_dir / dsets_raw_metrics
             if dsets_raw_metrics != ""
@@ -235,7 +236,7 @@ class Engine(_EngOpts):
 
     def fit(self):
         for i in range(self.start_epoch, self.epochs + 1):
-            if self.valid_first is False:
+            if self.valid_first is False and self.vtest_first is False:
                 self.net.train()
 
                 loss = self._fit_each_epoch(i)
@@ -245,8 +246,7 @@ class Engine(_EngOpts):
             self.prediction_per_epoch(i)
 
             self.valid_first = False
-            # valid_first is True
-            if self.valid_per_epoch != 0 and i % self.valid_per_epoch == 0:
+            if not self.vtest_first and self.valid_per_epoch != 0 and i % self.valid_per_epoch == 0:
                 self.net.eval()
                 score = self._valid_each_epoch(i)
                 self._print("Eval", score, i)
@@ -254,6 +254,7 @@ class Engine(_EngOpts):
                     self.best_score = score["score"]
                     self._save_ckpt(i, is_best=True)
 
+            self.vtest_first = False
             if self.vtest_per_epoch != 0 and (i % self.vtest_per_epoch == 0 or i < 5):
                 self.net.eval()
                 scores = self._vtest_each_epoch(i)
@@ -539,7 +540,7 @@ class EngineGAN(Engine):
 
     def fit(self):
         for i in range(self.start_epoch, self.epochs + 1):
-            if self.valid_first is False:
+            if self.valid_first is False and self.vtest_first is False:
                 self.net.train()
                 self.net_D.train()
 
@@ -552,8 +553,7 @@ class EngineGAN(Engine):
                 self.prediction_per_epoch(i)
 
             self.valid_first = False
-
-            if self.valid_per_epoch != 0 and i % self.valid_per_epoch == 0:
+            if not self.vtest_first and self.valid_per_epoch != 0 and i % self.valid_per_epoch == 0:
                 self.net.eval()
                 self.net_D.eval()
                 score = self._valid_each_epoch(i)
@@ -562,6 +562,7 @@ class EngineGAN(Engine):
                     self.best_score = score["score"]
                     self._save_ckpt(i, is_best=True)
 
+            self.vtest_first = False
             if self.vtest_per_epoch != 0 and (i % self.vtest_per_epoch == 0 or i < 5):
                 self.net.eval()
                 scores = self._vtest_each_epoch(i)

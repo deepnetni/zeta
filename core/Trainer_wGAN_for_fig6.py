@@ -119,19 +119,19 @@ class Trainer(EngineGAN):
         ).to(self.device)
         self.ms_stft_loss.eval()
 
-        self.pase = wf_builder("core/config/frontend/PASE+.cfg")
-        assert self.pase is not None
-        self.pase.cuda()
-        self.pase.eval()
-        self.pase.load_pretrained("core/pretrained/pase_e199.ckpt", load_last=True, verbose=False)
+        # self.pase = wf_builder("core/config/frontend/PASE+.cfg")
+        # assert self.pase is not None
+        # self.pase.cuda()
+        # self.pase.eval()
+        # self.pase.load_pretrained("core/pretrained/pase_e199.ckpt", load_last=True, verbose=False)
 
-        self.APC_criterion = APC_SNR_multi_filter(
-            model_hop=128,
-            model_winlen=512,
-            mag_bins=256,
-            theta=0.01,
-            hops=[8, 16, 32, 64],
-        ).to(self.device)
+        # self.APC_criterion = APC_SNR_multi_filter(
+        #     model_hop=128,
+        #     model_winlen=512,
+        #     mag_bins=256,
+        #     theta=0.01,
+        #     hops=[8, 16, 32, 64],
+        # ).to(self.device)
 
     def _config_scheduler(self, name: str, optimizer: Optimizer):
         supported = {
@@ -446,8 +446,8 @@ class Trainer(EngineGAN):
         }
 
         if return_loss:
-            # loss_dict = self.loss_fn(sph[..., : enh.size(-1)], enh)
-            loss_dict = self.loss_fn_apc_denoise(sph, enh)
+            loss_dict = self.loss_fn(sph[..., : enh.size(-1)], enh)
+            # loss_dict = self.loss_fn_apc_denoise(sph, enh)
         else:
             loss_dict = {}
 
@@ -465,7 +465,8 @@ class Trainer(EngineGAN):
         mic, HL = inputs
         enh = self.net(mic, HL)  # B,T
         sph = sph[..., : enh.size(-1)]
-        loss_dict = self.loss_fn_apc_denoise(sph, enh)
+        # loss_dict = self.loss_fn_apc_denoise(sph, enh)
+        loss_dict = self.loss_fn(sph, enh)
 
         fake_metric = self.net_D(sph, enh, HL)
         loss_GAN = F.mse_loss(fake_metric.flatten(), one_labels)
