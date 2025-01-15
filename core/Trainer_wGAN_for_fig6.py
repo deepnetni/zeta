@@ -571,6 +571,7 @@ class Trainer(EngineGAN):
 
         draw = False
 
+        generate_filter_params(119808)
         for mic, sph, HL, nlen in pbar:
             mic = mic.to(self.device)  # B,T,6
             sph = sph.to(self.device)  # b,c,t,f

@@ -43,7 +43,7 @@ class Eng_conf:
     train_num_workers: int = 8
     valid_batch_sz: int = 12  # 12
     valid_num_workers: int = 16
-    vtest_batch_sz: int = 12  # 12
+    vtest_batch_sz: int = 6  # 12
     vtest_num_workers: int = 16
 
 
