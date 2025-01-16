@@ -1,6 +1,8 @@
 import os
 import sys
 
+from core.utils.losses import loss_pmsqe
+
 sys.path.append(__file__.rsplit("/", 2)[0])
 
 from typing import Dict, Optional, Tuple
@@ -129,8 +131,8 @@ class TrainerVAD(Trainer):
         }
 
         if return_loss:
-            # loss_dict = self.loss_fn(sph[..., : enh.size(-1)], enh)
-            loss_dict = self.loss_fn_apc_denoise(sph, enh, lbl_vad, est_vad)
+            loss_dict = self.loss_fn(sph, enh, lbl_vad, est_vad)
+            # loss_dict = self.loss_fn_apc_denoise(sph, enh, lbl_vad, est_vad)
         else:
             loss_dict = {}
 
@@ -170,11 +172,60 @@ class TrainerVAD(Trainer):
             "vad": vad_lv.detach(),
         }
 
+    def loss_fn(self, clean: Tensor, enh: Tensor, lbl_vad, est_vad) -> Dict:
+        """
+        clean: B,T
+        """
+        # * pase loss
+        assert self.pase is not None
+        clean_pase = self.pase(clean.unsqueeze(1))  # B,1,T
+        clean_pase = clean_pase.flatten(0)
+        enh_pase = self.pase(enh.unsqueeze(1))
+        enh_pase = enh_pase.flatten(0)
+        pase_loss = F.mse_loss(clean_pase, enh_pase)
+
+        # * vad loss
+        lbl_vad = vad_to_frames(lbl_vad, 512, 256)  # B,T,1
+        vad_lv = self.focal(lbl_vad, est_vad)
+
+        specs_enh = self.stft.transform(enh)  # B,2,T,F
+        specs_sph = self.stft.transform(clean)
+
+        # sisnr_lv = loss_sisnr(clean, enh)
+        pmsqe_score = loss_pmsqe(specs_sph, specs_enh)
+        # mse_mag, mse_pha = loss_compressed_mag(specs_sph, specs_enh)
+        # loss = 0.05 * sisnr_lv + mse_pha + mse_mag + 0.3 * pmsqe_score
+        sc_loss, mag_loss = self.ms_stft_loss(enh, clean)
+        # loss = 0.05 * sisnr_lv + sc_loss + mag_loss + 0.3 * pmsqe_score
+        loss = sc_loss + mag_loss + 0.3 * pmsqe_score + 0.25 * pase_loss + vad_lv
+        # sdr_lv = -SDR(preds=enh, target=clean).mean()
+        # sc_loss, mag_loss = self.ms_stft_loss(enh, clean)
+        # else:
+        #     for idx, n in enumerate(nlen):
+        #         cln_ = clean[idx, :n]  # B,T
+        #         enh_ = enh[idx, :n]
+        #         sc_, mag_ = self.ms_stft_loss(enh_, cln_)
+        #         sc_loss = sc_loss + sc_
+        #         mag_loss = mag_loss + mag_
+
+        return {
+            "loss": loss,
+            # "sisnr": 0.05 * sisnr_lv.detach(),
+            # "mag": mse_mag.detach(),
+            # "pha": mse_pha.detach(),
+            "pmsq": 0.3 * pmsqe_score.detach(),
+            "sc": sc_loss.detach(),
+            "mag": mag_loss.detach(),
+            "pase_lv": 0.25 * pase_loss.detach(),
+            "vad": vad_lv.detach(),
+        }
+
     def _fit_generator_step(self, *inputs, sph, one_labels, lbl_vad):
         mic, HL = inputs
         enh, est_vad = self.net(mic, HL)  # B,T
         sph = sph[..., : enh.size(-1)]
-        loss_dict = self.loss_fn_apc_denoise(sph, enh, lbl_vad, est_vad)
+        # loss_dict = self.loss_fn_apc_denoise(sph, enh, lbl_vad, est_vad)
+        loss_dict = self.loss_fn(sph, enh, lbl_vad, est_vad)
 
         fake_metric = self.net_D(sph, enh, HL)
         loss_GAN = F.mse_loss(fake_metric.flatten(), one_labels)

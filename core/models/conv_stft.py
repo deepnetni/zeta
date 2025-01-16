@@ -42,11 +42,11 @@ class STFT(nn.Module):
         self.register_buffer("window", window)
         self.register_buffer("enframe", torch.eye(nframe)[:, None, :])
 
-    def nLen(self, nlen: Union[List, int]):
+    def nLen(self, nlen: Union[List, int]) -> torch.Tensor:
         len_list = [nlen] if isinstance(nlen, int) else nlen
 
         L = [(l // self.nhop) * self.nhop for l in len_list]
-        return L[0] if isinstance(nlen, int) else torch.tensor(L)
+        return torch.tensor(L[0]) if isinstance(nlen, int) else torch.tensor(L)
 
     def init_conv_stft_kernels(self, win=Union[str, np.ndarray], inverse=False):
         if isinstance(win, str):

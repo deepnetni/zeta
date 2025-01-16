@@ -119,11 +119,11 @@ class Trainer(EngineGAN):
         ).to(self.device)
         self.ms_stft_loss.eval()
 
-        # self.pase = wf_builder("core/config/frontend/PASE+.cfg")
-        # assert self.pase is not None
-        # self.pase.cuda()
-        # self.pase.eval()
-        # self.pase.load_pretrained("core/pretrained/pase_e199.ckpt", load_last=True, verbose=False)
+        self.pase = wf_builder("core/config/frontend/PASE+.cfg")
+        assert self.pase is not None
+        self.pase.cuda()
+        self.pase.eval()
+        self.pase.load_pretrained("core/pretrained/pase_e199.ckpt", load_last=True, verbose=False)
 
         # self.APC_criterion = APC_SNR_multi_filter(
         #     model_hop=128,
@@ -314,6 +314,14 @@ class Trainer(EngineGAN):
         """
         clean: B,T
         """
+        # * pase loss
+        assert self.pase is not None
+        clean_pase = self.pase(clean.unsqueeze(1))  # B,1,T
+        clean_pase = clean_pase.flatten(0)
+        enh_pase = self.pase(enh.unsqueeze(1))
+        enh_pase = enh_pase.flatten(0)
+        pase_loss = F.mse_loss(clean_pase, enh_pase)
+
         specs_enh = self.stft.transform(enh)  # B,2,T,F
         specs_sph = self.stft.transform(clean)
 
@@ -323,7 +331,7 @@ class Trainer(EngineGAN):
         # loss = 0.05 * sisnr_lv + mse_pha + mse_mag + 0.3 * pmsqe_score
         sc_loss, mag_loss = self.ms_stft_loss(enh, clean)
         # loss = 0.05 * sisnr_lv + sc_loss + mag_loss + 0.3 * pmsqe_score
-        loss = sc_loss + mag_loss + 0.3 * pmsqe_score
+        loss = sc_loss + mag_loss + 0.3 * pmsqe_score + 0.25 * pase_loss
         # sdr_lv = -SDR(preds=enh, target=clean).mean()
         # sc_loss, mag_loss = self.ms_stft_loss(enh, clean)
         # else:
@@ -342,6 +350,7 @@ class Trainer(EngineGAN):
             "pmsq": 0.3 * pmsqe_score.detach(),
             "sc": sc_loss.detach(),
             "mag": mag_loss.detach(),
+            "pase_lv": 0.25 * pase_loss.detach(),
         }
 
     def loss_D_fn(self, clean: Tensor, enh: Tensor) -> Dict:

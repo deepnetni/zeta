@@ -1,7 +1,9 @@
 import argparse
 import os
 import sys
+import warnings
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
 import torch
 import torch.nn.functional as F
@@ -13,15 +15,16 @@ from core.JointNSHModel import *
 from core.rebuild.FTCRN import Discriminator
 from core.Trainer_wGAN_for_fig6 import (
     Trainer,
-    TrainerMultiOutputs,
     TrainerGumbelCodebook,
+    TrainerMultiOutputs,
 )
 from core.Trainer_wGAN_VAD_for_fig6 import TrainerVAD
 from core.utils.audiolib import audioread, audiowrite
 from core.utils.ini_opts import read_ini
 from core.utils.logger import cprint
 from core.utils.register import tables
-from pathlib import Path
+
+warnings.filterwarnings("ignore", category=UserWarning, module="torch")
 
 
 @dataclass

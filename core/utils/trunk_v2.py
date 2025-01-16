@@ -23,10 +23,10 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, pad_se
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-from core.utils.audiolib import audioread
-from core.utils.gcc_phat import gcc_phat
-from core.utils.logger import get_logger
-from core.utils.register import tables
+from utils.audiolib import audioread
+from utils.gcc_phat import gcc_phat
+from utils.logger import get_logger
+from utils.register import tables
 
 
 def clip_to_shortest(batch: List):
@@ -99,7 +99,8 @@ class TrunkBasic(Dataset):
 
         self.dir = Path(dirname)
         self.clean_dir = Path(clean_dirname) if clean_dirname is not None else Path(dirname)
-        self.logger = get_logger(dirname)
+        # self.logger = get_logger(dirname)
+        self.logger = get_logger(self.__class__.__name__)
         self.csv_dir = csv_dir
         self.keymap = keymap
 
