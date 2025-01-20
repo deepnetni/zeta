@@ -11,7 +11,12 @@ sys.path.append(__file__.rsplit("/", 2)[0])
 from core.utils.register import tables
 from models.conformer import *
 from models.conv_stft import STFT
-from models.FTConformerBLK import ConditionalFTConformer, FTConformer
+from models.FTConformerBLK import (
+    ConditionalFTConformer,
+    FTConformer,
+    ConditionalFTConformer_,
+    FTDiTConformer,
+)
 from models.Fusion.ms_cam import AFF
 from models.gumbel_vector_quantizer import GumbelVectorQuantizer
 
@@ -1046,7 +1051,7 @@ class BaselineConditionalConformer(nn.Module):
         self.encoder = DenseEncoder(in_channel=2, channels=mid_channel)
 
         self.conformer = nn.ModuleList(
-            [ConditionalFTConformer(dim=mid_channel) for _ in range(conformer_num)]
+            [ConditionalFTConformer_(dim=mid_channel) for _ in range(conformer_num)]
         )
 
         self.mask_decoder = MaskDecoder(num_features=nbin, num_channel=mid_channel, out_channel=1)
@@ -1138,7 +1143,7 @@ class BaselineXkConditionalConformer(nn.Module):
         self.encoder = DenseEncoder(in_channel=2, channels=mid_channel)
 
         self.conformer = nn.ModuleList(
-            [ConditionalFTConformer(dim=mid_channel) for _ in range(conformer_num)]
+            [ConditionalFTConformer_(dim=mid_channel) for _ in range(conformer_num)]
         )
 
         self.mask_decoder = MaskDecoder(num_features=nbin, num_channel=mid_channel, out_channel=1)
@@ -1163,6 +1168,96 @@ class BaselineXkConditionalConformer(nn.Module):
         hl_b = self.mlp(hl_b)  # b,1,1,f
         # hl_b = hl_b.view(-1, hl_b.size(-1))  # b,mch
         hl_b = hl_b.squeeze(2)  # b,t,c
+
+        # b,16,t,f
+        # xk_hl, _ = self.hl_attn(xk, hl_b)
+
+        xk = self.encoder(xk)
+
+        c = hl_b
+        for l in self.conformer:
+            xk, c, _ = l(xk, c, causal=True)
+
+        # x_fact = self.factAttn(xk, x_hl)
+        # xk: b,c,t,f; x_hl: b,c,t,1
+        mask = self.mask_decoder(xk)
+        spec = self.complex_decoder(xk)
+        r, i = spec.chunk(2, dim=1)  # b,1,t,f
+        phase = torch.atan2(i, r)
+
+        # mask = self.factAttn(mask, xk_hl)
+        xk_mag_est = xk_mag * mask
+        spec_r = xk_mag_est * torch.cos(phase)
+        spec_i = xk_mag_est * torch.sin(phase)
+
+        xk_est = torch.concat([spec_r, spec_i], dim=1)
+
+        x = self.stft.inverse(xk_est)
+
+        return x
+
+
+@tables.register("models", "DiTConformer")
+class DiTConformer(nn.Module):
+    def __init__(
+        self, nframe: int, nhop: int, mid_channel: int = 64, conformer_num=4, fs=16000
+    ) -> None:
+        super().__init__()
+
+        self.stft = STFT(nframe, nhop, nframe)
+        self.reso = fs / nframe
+        nbin = nframe // 2 + 1
+        assert 250 % self.reso == 0
+        self.freqs = torch.linspace(0, fs // 2, nbin)  # []
+
+        # self.preprocess = HLModule(nbin, HL_freq_extend=self.freqs)
+        self.preprocess = HLModule(nbin, HL_freq_extend=self.freqs)
+        self.group = mid_channel
+        # self.cbook = GumbelVectorQuantizer(nbin, 128, self.group, 65 * self.group)
+
+        self.mlp = nn.Sequential(
+            nn.Linear(nbin, nbin * 4),
+            Rearrange("b c t (f n)-> b (c n) t f", n=4),
+            nn.GELU(approximate="tanh"),
+            nn.Conv2d(4, 16, (1, 3), (1, 2), (0, 1)),
+            nn.BatchNorm2d(16),
+            nn.PReLU(),
+            nn.Conv2d(16, 64, (1, 3), (1, 2), (0, 1)),
+            nn.BatchNorm2d(64),
+            nn.PReLU(),
+            Rearrange("b c t f-> b f t c"),
+            nn.Linear(64, mid_channel),
+        )
+        # self.hl_attn = HLAttn()
+
+        self.encoder = DenseEncoder(in_channel=2, channels=mid_channel)
+
+        self.conformer = nn.ModuleList(
+            [FTDiTConformer(dim=mid_channel) for _ in range(conformer_num)]
+        )
+
+        self.mask_decoder = MaskDecoder(num_features=nbin, num_channel=mid_channel, out_channel=1)
+        self.complex_decoder = ComplexDecoder(num_channel=mid_channel)
+
+        # self.cbook = nn.ModuleList(
+        #     [CodeBook(num_cb=64, dim_cb=65, mid_channel=4, dim_inp=16) for _ in range(2)]
+        # )
+        # self.factAttn = FactorizedAttn(1, 16, 8)
+
+    def forward(self, x, HL):
+        """
+        x: B,T
+        HL: B,6
+        """
+        xk = self.stft.transform(x)
+        xk_mag = xk.pow(2).sum(1, keepdim=True).sqrt()  # B,1,T,F
+        # xk_bands_pow = compute_subbands_energy(xk, self.ht_freq)
+
+        # xk_b: b,t,16; hl_b: b,t,16
+        hl_b = self.preprocess.extend_with_linear(HL)  # b,1,1,f
+        hl_b = self.mlp(hl_b)  # b,1,1,f
+        # hl_b = hl_b.view(-1, hl_b.size(-1))  # b,mch
+        hl_b = hl_b.squeeze(2)
 
         # b,16,t,f
         # xk_hl, _ = self.hl_attn(xk, hl_b)
@@ -1228,8 +1323,10 @@ if __name__ == "__main__":
     # net = BaselineHLCodec(512, 256, 48, 2)
     # net = BaselineGumbelCodebook(512, 256, 48, 2)
     # net = BaselineXkConditionalConformer(512, 256, 48, 2)
-    net = BaselineVAD(512, 256, 48, 2)
-    out, vad = net(inp, hl)
-    print(out.shape, vad.shape)
+    # net = BaselineConditionalConformer(512, 256, 48, 2)
+    net = DiTConformer(512, 256, 48, 2)
+    # net = BaselineVAD(512, 256, 48, 2)
+    out = net(inp, hl)
+    print(out.shape)
 
     check_flops(net, inp, hl)

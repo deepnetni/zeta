@@ -32,7 +32,7 @@ class Eng_conf:
     name: str = "baseline_fig6"
     epochs: int = 30
     desc: str = ""
-    info_dir: str = f"{Path.home()}/model_results_trunk/FIG6/fig6_GAN"
+    info_dir: str = f"{Path.home()}/model_results_trunk/FIG6/trained_fig6_GAN_mstftloss"
     resume: bool = True
     optimizer_name: str = "adam"
     scheduler_name: str = "stepLR"
@@ -42,11 +42,11 @@ class Eng_conf:
     vtest_outdir: str = "vtest"
     dsets_raw_metrics: str = "dset_metrics.json"
 
-    train_batch_sz: int = 8
+    train_batch_sz: int = 6
     train_num_workers: int = 16
     valid_batch_sz: int = 12  # 12
     valid_num_workers: int = 16
-    vtest_batch_sz: int = 4  # 12
+    vtest_batch_sz: int = 12  # 12
     vtest_num_workers: int = 16
 
 
@@ -150,6 +150,7 @@ if __name__ == "__main__":
         "condConformer",
         "baseline_fig6_linear",
         "xkcConformer",
+        "DiTConformer",
     ]:
         Trainer = Trainer
         # Trainer = TrainerPhase

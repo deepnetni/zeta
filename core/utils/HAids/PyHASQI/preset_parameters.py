@@ -61,8 +61,8 @@ if __name__ == "__main__":
     # lenx = 71808
     # lenx = 144000
     # lenx = 120000
-    # lenx = 119808
-    lenx = 240000
+    lenx = 119808
+    # lenx = 240000
 
     Env2_coscf_total, Env2_sincf_total = pre_compute_params(nchan, lenx, fsamp, cfreq1)
     BM2_coscf_total, BM2_sincf_total = pre_compute_params(nchan, lenx, fsamp, cfreq)

@@ -174,7 +174,7 @@ class Trainer(EngineGAN):
             desc=f"v-{self.valid_dset.dirname}",
         )
 
-        generate_filter_params(119808)
+        # generate_filter_params(119808)
         for mic, sph, hl, nlen in pbar:
             # print(mic.shape, sph.shape, hl.shape, nlen.shape)
             mic = mic.to(self.device)  # B,T; mic data
@@ -216,7 +216,7 @@ class Trainer(EngineGAN):
             desc=f"v-{self.vtest_dset.dirname}",
         )
 
-        generate_filter_params(240000)
+        # generate_filter_params(240000)
         for mic, sph, hl, nlen in pbar:
             mic = mic.to(self.device)  # B,T,6
             sph = sph.to(self.device)  # b,c,t,f
@@ -533,7 +533,7 @@ class Trainer(EngineGAN):
             desc=f"Epoch-{epoch}/{self.epochs}",
         )
 
-        generate_filter_params(119808)
+        # generate_filter_params(119808)
         for mic, sph, HL in pbar:
             mic = mic.to(self.device)  # B,T
             sph = sph.to(self.device)  # B,T
@@ -581,7 +581,7 @@ class Trainer(EngineGAN):
 
         draw = False
 
-        generate_filter_params(119808)
+        # generate_filter_params(119808)
         for mic, sph, HL, nlen in pbar:
             mic = mic.to(self.device)  # B,T,6
             sph = sph.to(self.device)  # b,c,t,f
@@ -626,7 +626,7 @@ class Trainer(EngineGAN):
         # vtest_outdir = os.path.join(self.vtest_outdir, dirname)
         # shutil.rmtree(vtest_outdir) if os.path.exists(vtest_outdir) else None
 
-        generate_filter_params(240000)
+        # generate_filter_params(240000)
         for mic, sph, HL, nlen in pbar:
             mic = mic.to(self.device)  # B,T,6
             sph = sph.to(self.device)  # b,c,t,f

@@ -18,7 +18,7 @@ fig6_compensation_conf:
 
 onlinesynth_nearend_datasets:
   dns:
-    weight: 0.0
+    weight: 1.0
     dir: '/home/deepni/disk/DNS-Challenge/datasets/clean'
     # dir: '/home/deepnetni/disk/DNS-Challenge/datasets/clean'
 
