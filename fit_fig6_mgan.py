@@ -32,7 +32,7 @@ class Eng_conf:
     name: str = "baseline_fig6"
     epochs: int = 30
     desc: str = ""
-    info_dir: str = f"{Path.home()}/model_results_trunk/FIG6/trained_fig6_GAN_mstftloss"
+    info_dir: str = f"{Path.home()}/model_results_trunk/FIG6/fig6_GAN"
     resume: bool = True
     optimizer_name: str = "adam"
     scheduler_name: str = "stepLR"
@@ -46,7 +46,7 @@ class Eng_conf:
     train_num_workers: int = 16
     valid_batch_sz: int = 12  # 12
     valid_num_workers: int = 16
-    vtest_batch_sz: int = 12  # 12
+    vtest_batch_sz: int = 8  # 12
     vtest_num_workers: int = 16
 
 

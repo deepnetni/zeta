@@ -1,15 +1,17 @@
 import sys
 from typing import List, Union
 
-import einops
 import torch
+import torch.nn as nn
+from torch import Size, Tensor
+import einops
 from einops.layers.torch import Rearrange
-from torch import Size, Tensor, nn
 
 sys.path.append(__file__.rsplit("/", 2)[0])
 
 from core.utils.register import tables
-from models.conformer import *
+
+from models.conformer import GLU, FeedForward, Scale, PreNorm
 from models.conv_stft import STFT
 from models.FTConformerBLK import (
     ConditionalFTConformer,
@@ -1051,7 +1053,7 @@ class BaselineConditionalConformer(nn.Module):
         self.encoder = DenseEncoder(in_channel=2, channels=mid_channel)
 
         self.conformer = nn.ModuleList(
-            [ConditionalFTConformer_(dim=mid_channel) for _ in range(conformer_num)]
+            [ConditionalFTConformer(dim=mid_channel) for _ in range(conformer_num)]
         )
 
         self.mask_decoder = MaskDecoder(num_features=nbin, num_channel=mid_channel, out_channel=1)

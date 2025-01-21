@@ -68,7 +68,7 @@ class FTConformer(nn.Module):
         return x_, (attn_f, attn_t)
 
 
-class ConditionalFTConformer(nn.Module):
+class ConditionalFTConformer_(nn.Module):
     def __init__(
         self,
         dim,
@@ -207,7 +207,7 @@ class ConditionalFTConformer(nn.Module):
         return x_, c, (attn_f, attn_t)
 
 
-class ConditionalFTConformer_(nn.Module):
+class ConditionalFTConformer(nn.Module):
     def __init__(
         self,
         dim,

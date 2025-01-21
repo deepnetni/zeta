@@ -411,7 +411,11 @@ class Engine(_EngOpts):
     def _load_ckpt(self):
         ckpt = torch.load(self.ckpt_file, map_location=self.device)
 
-        self.start_epoch = ckpt["epoch"] + 1 if self.valid_first is False else ckpt["epoch"]
+        if self.valid_first or self.vtest_first:
+            self.start_epoch = ckpt["epoch"]
+        else:
+            self.start_epoch = ckpt["epoch"] + 1
+
         self.best_score = ckpt["best_score"]
         self.optimizer.load_state_dict(ckpt["optimizer"])
         self.scheduler.load_state_dict(ckpt["scheduler"])
