@@ -20,6 +20,7 @@ from tqdm import tqdm
 from core.Trainer_wGAN_for_fig6 import Trainer
 from core.utils.focal_loss import BCEFocalLoss
 from core.utils.record import REC
+from core.utils.HAids.PyHASQI.preset_parameters import generate_filter_params
 
 
 def vad_to_frames(vad: Tensor, nframe: int, nhop: int):
@@ -69,169 +70,21 @@ class TrainerVAD(Trainer):
 
         return enh
 
-    def valid_fn(
-        self,
-        sph: Tensor,
-        enh: Tensor,
-        lbl_vad,
-        est_vad,
-        nlen_list: Tensor,
-        return_loss: bool = True,
-    ) -> Dict:
-        """
-        B,T
-        """
-
-        nB = sph.size(0)
-        # if nlen_list.unique().numel() == 1:
-        if True:
-            sph = sph[..., : nlen_list[0]]
-            enh = enh[..., : nlen_list[0]]
-            np_l_sph = sph.cpu().numpy()
-            np_l_enh = enh.cpu().numpy()
-
-            sisnr_sc = self._si_snr(sph, enh).mean()
-            sdr_sc = SDR(preds=enh, target=sph).mean()
-        else:
-            sisnr_l = []
-            sdr_l = []
-            np_l_enh, np_l_sph = [], []
-
-            sisnr_sc, sdr_sc = 0, 0
-            for i in range(nB):
-                sph_ = sph[i, : nlen_list[i]]  # B,T
-                enh_ = enh[i, : nlen_list[i]]
-                np_l_sph.append(sph_.cpu().numpy())
-                np_l_enh.append(enh_.cpu().numpy())
-
-                sisnr_l.append(self._si_snr(sph_.cpu().numpy(), enh_.cpu().numpy()))
-                sdr_l.append(SDR(preds=enh_, target=sph_).cpu().numpy())
-                sisnr_sc = np.array(sisnr_l).mean()
-                sdr_sc = np.array(sdr_l).mean()
-
-        # sisnr_sc_ = self._si_snr(sph, enh).mean()
-        pesq_wb_sc = self._pesq(np_l_sph, np_l_enh, fs=16000).mean()
-        pesq_nb_sc = self._pesq(np_l_sph, np_l_enh, fs=16000, mode="nb").mean()
-        stoi_sc = self._stoi(np_l_sph, np_l_enh, fs=16000).mean()
-
-        # composite = self._eval(clean, enh, 16000)
-        # composite = {k: np.mean(v) for k, v in composite.items()}
-        # pesq = composite.pop("pesq")
-
-        # vad_lv = self.focal(lbl_vad, est_vad)
-
-        state = {
-            "score": pesq_wb_sc,
-            "sisnr": sisnr_sc,
-            # "sisnr_pad": sisnr_sc_.cpu().detach().numpy(),
-            "sdr": sdr_sc,
-            "pesq": pesq_wb_sc,
-            "pesq_nb": pesq_nb_sc,
-            "stoi": stoi_sc,
-        }
-
-        if return_loss:
-            loss_dict = self.loss_fn(sph, enh, lbl_vad, est_vad)
-            # loss_dict = self.loss_fn_apc_denoise(sph, enh, lbl_vad, est_vad)
-        else:
-            loss_dict = {}
-
-        # return dict(state, **composite)
-        return dict(state, **loss_dict)
-
-    def loss_fn_apc_denoise(self, clean: Tensor, enh: Tensor, lbl_vad, est_vad) -> Dict:
-        """loss_fn_apc_denoise_wphase_loss
-        clean: B,T
-        """
-        # specs_enh = self.stft.transform(enh)  # B,2,T,F
-        # specs_sph = self.stft.transform(clean)
-
-        # * pase loss
-        assert self.pase is not None
-        clean_pase = self.pase(clean.unsqueeze(1))  # B,1,T
-        clean_pase = clean_pase.flatten(0)
-        enh_pase = self.pase(enh.unsqueeze(1))
-        enh_pase = enh_pase.flatten(0)
-        pase_loss = F.mse_loss(clean_pase, enh_pase)
-
-        # apc loss
-        APC_SNR_loss, apc_pmsqe_loss = self.APC_criterion(enh + 1e-8, clean + 1e-8)
-
-        # phase loss
-        # ph_lv, phase_dict = loss_phase(specs_sph, phase)
-        lbl_vad = vad_to_frames(lbl_vad, 512, 256)  # B,T,1
-        vad_lv = self.focal(lbl_vad, est_vad)
-
-        loss = 0.05 * APC_SNR_loss + apc_pmsqe_loss + 0.25 * pase_loss + vad_lv
-
-        return {
-            "loss": loss,
-            "pmsqe": apc_pmsqe_loss.detach(),
-            "apc_snr": 0.05 * APC_SNR_loss.detach(),
-            "pase": 0.25 * pase_loss.detach(),
-            "vad": vad_lv.detach(),
-        }
-
-    def loss_fn(self, clean: Tensor, enh: Tensor, lbl_vad, est_vad) -> Dict:
-        """
-        clean: B,T
-        """
-        # * pase loss
-        assert self.pase is not None
-        clean_pase = self.pase(clean.unsqueeze(1))  # B,1,T
-        clean_pase = clean_pase.flatten(0)
-        enh_pase = self.pase(enh.unsqueeze(1))
-        enh_pase = enh_pase.flatten(0)
-        pase_loss = F.mse_loss(clean_pase, enh_pase)
-
-        # * vad loss
-        lbl_vad = vad_to_frames(lbl_vad, 512, 256)  # B,T,1
-        vad_lv = self.focal(lbl_vad, est_vad)
-
-        specs_enh = self.stft.transform(enh)  # B,2,T,F
-        specs_sph = self.stft.transform(clean)
-
-        # sisnr_lv = loss_sisnr(clean, enh)
-        pmsqe_score = loss_pmsqe(specs_sph, specs_enh)
-        # mse_mag, mse_pha = loss_compressed_mag(specs_sph, specs_enh)
-        # loss = 0.05 * sisnr_lv + mse_pha + mse_mag + 0.3 * pmsqe_score
-        sc_loss, mag_loss = self.ms_stft_loss(enh, clean)
-        # loss = 0.05 * sisnr_lv + sc_loss + mag_loss + 0.3 * pmsqe_score
-        loss = sc_loss + mag_loss + 0.3 * pmsqe_score + 0.25 * pase_loss + vad_lv
-        # sdr_lv = -SDR(preds=enh, target=clean).mean()
-        # sc_loss, mag_loss = self.ms_stft_loss(enh, clean)
-        # else:
-        #     for idx, n in enumerate(nlen):
-        #         cln_ = clean[idx, :n]  # B,T
-        #         enh_ = enh[idx, :n]
-        #         sc_, mag_ = self.ms_stft_loss(enh_, cln_)
-        #         sc_loss = sc_loss + sc_
-        #         mag_loss = mag_loss + mag_
-
-        return {
-            "loss": loss,
-            # "sisnr": 0.05 * sisnr_lv.detach(),
-            # "mag": mse_mag.detach(),
-            # "pha": mse_pha.detach(),
-            "pmsq": 0.3 * pmsqe_score.detach(),
-            "sc": sc_loss.detach(),
-            "mag": mag_loss.detach(),
-            "pase_lv": 0.25 * pase_loss.detach(),
-            "vad": vad_lv.detach(),
-        }
-
     def _fit_generator_step(self, *inputs, sph, one_labels, lbl_vad):
         mic, HL = inputs
         enh, est_vad = self.net(mic, HL)  # B,T
         sph = sph[..., : enh.size(-1)]
         # loss_dict = self.loss_fn_apc_denoise(sph, enh, lbl_vad, est_vad)
-        loss_dict = self.loss_fn(sph, enh, lbl_vad, est_vad)
+        loss_dict = self.loss_fn(sph, enh)
+        # * vad loss
+        lbl_vad = vad_to_frames(lbl_vad, 512, 256)  # B,T,1
+        vad_lv = self.focal(lbl_vad, est_vad)
 
         fake_metric = self.net_D(sph, enh, HL)
         loss_GAN = F.mse_loss(fake_metric.flatten(), one_labels)
 
-        loss = loss_dict["loss"] + loss_GAN
-        loss_dict.update({"loss_G": loss_GAN.detach()})
+        loss = loss_dict["loss"] + loss_GAN + vad_lv
+        loss_dict.update({"loss_G": loss_GAN.detach(), "vad_lv": vad_lv.detach()})
 
         return enh, loss, loss_dict
 
@@ -253,20 +106,19 @@ class TrainerVAD(Trainer):
     def _valid_step(self, *inps, sph, lbl_vad, nlen) -> Tuple[Tensor, Dict]:
         mic, HL = inps
         with torch.no_grad():
-            enh, vad = self.net(mic, HL)  # B,T,M
+            enh, est_vad = self.net(mic, HL)  # B,T,M
 
-        metric_dict = self.valid_fn(sph, enh, lbl_vad, vad, nlen)
+        metric_dict = self.valid_fn(sph, enh, nlen)
+        lbl_vad = vad_to_frames(lbl_vad, 512, 256)  # B,T,1
+        vad_lv = self.focal(lbl_vad, est_vad)
+
         hasqi_score = self.batch_hasqi_score(sph, enh, HL)
         if hasqi_score is not None:
             hasqi_score = hasqi_score.mean()
         else:
             hasqi_score = torch.tensor(0.0)
 
-        metric_dict.update(
-            {
-                "HASQI": hasqi_score,
-            }
-        )
+        metric_dict.update({"HASQI": hasqi_score, "vad_lv": vad_lv})
 
         return enh, metric_dict
 
@@ -282,6 +134,7 @@ class TrainerVAD(Trainer):
             leave=True,
             desc=f"Epoch-{epoch}/{self.epochs}",
         )
+        generate_filter_params(119808)
         for mic, lbl, HL in pbar:
             sph, lbl_vad = lbl[..., 0], lbl[..., 1]
             mic = mic.to(self.device)  # B,T
@@ -333,6 +186,7 @@ class TrainerVAD(Trainer):
 
         draw = False
 
+        generate_filter_params(119808)
         for mic, lbl, HL, nlen in pbar:
             sph, lbl_vad = lbl[..., 0], lbl[..., 1]
             mic = mic.to(self.device)  # B,T,6
@@ -379,6 +233,7 @@ class TrainerVAD(Trainer):
         # vtest_outdir = os.path.join(self.vtest_outdir, dirname)
         # shutil.rmtree(vtest_outdir) if os.path.exists(vtest_outdir) else None
 
+        generate_filter_params(240000)
         for mic, lbl, HL, nlen in pbar:
             sph, lbl_vad = lbl[..., 0], lbl[..., 1]
             mic = mic.to(self.device)  # B,T,6

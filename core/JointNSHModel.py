@@ -1106,6 +1106,122 @@ class BaselineConditionalConformer(nn.Module):
         return x
 
 
+@tables.register("models", "condConformerVAD")
+class BaselineConditionalConformerVAD(nn.Module):
+    def __init__(
+        self, nframe: int, nhop: int, mid_channel: int = 64, conformer_num=4, fs=16000
+    ) -> None:
+        super().__init__()
+
+        self.stft = STFT(nframe, nhop, nframe)
+        self.reso = fs / nframe
+        nbin = nframe // 2 + 1
+        assert 250 % self.reso == 0
+        self.freqs = torch.linspace(0, fs // 2, nbin)  # []
+
+        # self.preprocess = HLModule(nbin, HL_freq_extend=self.freqs)
+        self.preprocess = HLModule(nbin, HL_freq_extend=self.freqs)
+        self.group = mid_channel
+        # self.cbook = GumbelVectorQuantizer(nbin, 128, self.group, 65 * self.group)
+
+        self.mlp = nn.Sequential(
+            nn.Linear(nbin, nbin * 4),
+            Rearrange("b c t (f n)-> b (c n) t f", n=4),
+            nn.GELU(approximate="tanh"),
+            nn.Conv2d(4, 16, (1, 3), (1, 2), (0, 1)),
+            nn.BatchNorm2d(16),
+            nn.PReLU(),
+            nn.Conv2d(16, 64, (1, 3), (1, 2), (0, 1)),
+            nn.BatchNorm2d(64),
+            nn.PReLU(),
+            Rearrange("b c t f-> b f t c"),
+            nn.Linear(64, mid_channel),
+        )
+        # self.hl_attn = HLAttn()
+
+        self.encoder = DenseEncoder(in_channel=2, channels=mid_channel)
+
+        self.conformer = nn.ModuleList(
+            [ConditionalFTConformer(dim=mid_channel) for _ in range(conformer_num)]
+        )
+
+        self.mask_decoder = MaskDecoder(num_features=nbin, num_channel=mid_channel, out_channel=1)
+        self.complex_decoder = ComplexDecoder(num_channel=mid_channel)
+
+        # self.cbook = nn.ModuleList(
+        #     [CodeBook(num_cb=64, dim_cb=65, mid_channel=4, dim_inp=16) for _ in range(2)]
+        # )
+        # self.factAttn = FactorizedAttn(1, 16, 8)
+        self.vad_predictor = nn.Sequential(
+            nn.AvgPool2d(kernel_size=(1, 65), stride=(1, 65)),  # B,C,T,1
+            nn.Conv2d(
+                in_channels=mid_channel,
+                out_channels=mid_channel,
+                kernel_size=1,
+                stride=1,
+                padding=0,
+            ),  # b,c,t,1
+            Rearrange("b c t ()->b t c"),
+            nn.LayerNorm(mid_channel),
+            nn.PReLU(),
+            nn.GRU(
+                input_size=mid_channel,
+                hidden_size=128,
+                num_layers=2,
+                batch_first=True,
+            ),
+        )
+
+        self.vad_post = nn.Sequential(
+            nn.Linear(128, 1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x, HL):
+        """
+        x: B,T
+        HL: B,6
+        """
+        xk = self.stft.transform(x)
+        xk_mag = xk.pow(2).sum(1, keepdim=True).sqrt()  # B,1,T,F
+        # xk_bands_pow = compute_subbands_energy(xk, self.ht_freq)
+
+        # xk_b: b,t,16; hl_b: b,t,16
+        hl_b = self.preprocess.extend_with_linear(HL)  # b,1,1,f
+        hl_b = self.mlp(hl_b)  # b,1,1,f
+        # hl_b = hl_b.view(-1, hl_b.size(-1))  # b,mch
+        hl_b = hl_b.squeeze(2)
+
+        # b,16,t,f
+        # xk_hl, _ = self.hl_attn(xk, hl_b)
+
+        xk = self.encoder(xk)
+
+        for l in self.conformer:
+            xk, _ = l(xk, hl_b, causal=True)
+
+        vad_pred, _ = self.vad_predictor(xk)
+        vad = self.vad_post(vad_pred)
+
+        # x_fact = self.factAttn(xk, x_hl)
+        # xk: b,c,t,f; x_hl: b,c,t,1
+        mask = self.mask_decoder(xk)
+        spec = self.complex_decoder(xk)
+        r, i = spec.chunk(2, dim=1)  # b,1,t,f
+        phase = torch.atan2(i, r)
+
+        # mask = self.factAttn(mask, xk_hl)
+        xk_mag_est = xk_mag * mask
+        spec_r = xk_mag_est * torch.cos(phase)
+        spec_i = xk_mag_est * torch.sin(phase)
+
+        xk_est = torch.concat([spec_r, spec_i], dim=1)
+
+        x = self.stft.inverse(xk_est)
+
+        return x, vad
+
+
 @tables.register("models", "xkcConformer")
 class BaselineXkConditionalConformer(nn.Module):
     """condition is xk and hl"""

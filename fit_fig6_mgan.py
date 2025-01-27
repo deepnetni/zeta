@@ -87,6 +87,7 @@ def parse():
     parser.add_argument("--name", help="name of the model")
 
     parser.add_argument("--small", help="small dataset", action="store_true")
+    parser.add_argument("--vad", help="vad dataset", action="store_true")
 
     parser.add_argument("--print", help="print models", action="store_true")
 
@@ -121,7 +122,7 @@ def overrides(conf, args):
 
 
 if __name__ == "__main__":
-    import inspect
+    # import inspect
 
     args = parse()
 
@@ -140,10 +141,15 @@ if __name__ == "__main__":
     md_name = cfg["config"]["name"]
 
     if args.small:
-        train_dset, valid_dset, vtest_dset = get_datasets("FIG6small_SIG")
-        # train_dset, valid_dset, vtest_dset = get_datasets("FIG6smallVad_SIG")
+        if args.vad:
+            train_dset, valid_dset, vtest_dset = get_datasets("FIG6smallVad_SIG")
+        else:
+            train_dset, valid_dset, vtest_dset = get_datasets("FIG6small_SIG")
     else:
-        train_dset, valid_dset, vtest_dset = get_datasets("FIG6_SIG")
+        if args.vad:
+            train_dset, valid_dset, vtest_dset = get_datasets("FIG6Vad_SIG")
+        else:
+            train_dset, valid_dset, vtest_dset = get_datasets("FIG6_SIG")
 
     if md_name in [
         "baseline_fig6",
@@ -156,9 +162,11 @@ if __name__ == "__main__":
         # Trainer = TrainerPhase
     elif md_name == "GumbelCodebook":
         Trainer = TrainerGumbelCodebook
-    elif md_name == "baseline_fig6_vad":
+    elif md_name in [
+        "baseline_fig6_vad",
+        "condConformerVAD",
+    ]:
         Trainer = TrainerVAD
-        train_dset, valid_dset, vtest_dset = get_datasets("FIG6smallVad_SIG")
     else:
         Trainer = TrainerMultiOutputs
 
