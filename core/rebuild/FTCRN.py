@@ -1,9 +1,9 @@
 import torch
-from torch import Tensor, nn
-
 from core.models.conv_stft import STFT
 from core.utils.check_flops import check_flops
 from core.utils.register import tables
+from einops.layers.torch import Rearrange
+from torch import Tensor, nn
 
 
 def expand_HT(ht: torch.Tensor, T: int, reso):
@@ -314,12 +314,188 @@ class MGAN_G(nn.Module):
         return out
 
 
+@tables.register("models", "FTCRN_VAD")
+class MGAN_G_VAD(nn.Module):
+    """
+    Cheng, J., Liang, R., Zhao, L., Huang, C. and Schuller, B.W., 2023. Speech denoising and compensation for hearing aids using an FTCRN-based metric GAN. IEEE Signal Processing Letters, 30, pp.374-378.
+    """
+
+    def __init__(self, nframe=512, nhop=256):
+        super().__init__()
+
+        self.stft = STFT(nframe, nhop, nframe)
+        self.nbin = nframe // 2 + 1
+        self.reso = 16000 / nframe
+        assert self.reso < 250 and 250 % self.reso == 0
+
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=3, out_channels=32, kernel_size=(1, 5), stride=(1, 2), padding=(0, 1)
+            ),
+            nn.BatchNorm2d(32),
+            nn.PReLU(),
+        )
+
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=32, out_channels=32, kernel_size=(1, 3), stride=(1, 2), padding=(0, 1)
+            ),
+            nn.BatchNorm2d(32),
+            nn.PReLU(),
+        )
+
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=32, out_channels=32, kernel_size=(1, 3), stride=(1, 1), padding=(0, 1)
+            ),
+            nn.BatchNorm2d(32),
+            nn.PReLU(),
+        )
+
+        self.conv4 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=32, out_channels=64, kernel_size=(1, 3), stride=(1, 1), padding=(0, 1)
+            ),
+            nn.BatchNorm2d(64),
+            nn.PReLU(),
+        )
+
+        self.conv5 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=64, out_channels=128, kernel_size=(1, 3), stride=(1, 1), padding=(0, 1)
+            ),
+            nn.BatchNorm2d(128),
+            nn.PReLU(),
+        )
+
+        self.DPRNN_1 = DPRNN_Block(numUnits=128, width=64)
+        self.DPRNN_2 = DPRNN_Block(numUnits=128, width=64)
+
+        self.convT1 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels=256, out_channels=64, kernel_size=(1, 3), stride=(1, 1), padding=(0, 0)
+            ),
+            nn.BatchNorm2d(64),
+            nn.PReLU(),
+        )
+
+        self.convT2 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels=128, out_channels=32, kernel_size=(1, 3), stride=(1, 1), padding=(0, 0)
+            ),
+            nn.BatchNorm2d(32),
+            nn.PReLU(),
+        )
+
+        self.convT3 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels=64, out_channels=32, kernel_size=(1, 3), stride=(1, 1), padding=(0, 0)
+            ),
+            nn.BatchNorm2d(32),
+            nn.PReLU(),
+        )
+
+        self.convT4 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels=64, out_channels=32, kernel_size=(1, 3), stride=(1, 2), padding=(0, 0)
+            ),
+            nn.BatchNorm2d(32),
+            nn.PReLU(),
+        )
+
+        self.convT5 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels=64, out_channels=2, kernel_size=(1, 5), stride=(1, 2), padding=(0, 0)
+            ),
+        )
+
+        self.vad_predictor = nn.Sequential(
+            nn.AvgPool2d(kernel_size=(1, 65), stride=(1, 65)),  # B,C,T,1
+            nn.Conv2d(
+                in_channels=128,
+                out_channels=128,
+                kernel_size=1,
+                stride=1,
+                padding=0,
+            ),  # b,c,t,1
+            Rearrange("b c t ()->b t c"),
+            nn.LayerNorm(128),
+            nn.PReLU(),
+            nn.GRU(
+                input_size=128,
+                hidden_size=128,
+                num_layers=2,
+                batch_first=True,
+            ),
+        )
+
+        self.vad_post = nn.Sequential(
+            nn.Linear(128, 1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, inp, ht):
+        """
+        inp: B,T
+        ht: B, 6
+        """
+        # spec: [B, 2, T, Fc]
+
+        spec = self.stft.transform(inp)  # b,2,t,f
+        ht = expand_HT(ht, spec.shape[-2], self.reso)
+
+        cat_input = torch.cat([spec, ht], dim=1)
+        conv_out1 = self.conv1(cat_input)
+        conv_out2 = self.conv2(conv_out1)
+        conv_out3 = self.conv3(conv_out2)
+        conv_out4 = self.conv4(conv_out3)
+        conv_out5 = self.conv5(conv_out4)
+
+        DPRNN_out1 = self.DPRNN_1(conv_out5)
+        DPRNN_out2 = self.DPRNN_2(DPRNN_out1)
+        print(DPRNN_out2.shape)
+
+        convT1_input = torch.cat((conv_out5, DPRNN_out2), 1)
+        convT1_out = self.convT1(convT1_input)
+
+        convT2_input = torch.cat((conv_out4, convT1_out[:, :, :, :-2]), 1)
+        convT2_out = self.convT2(convT2_input)
+
+        convT3_input = torch.cat((conv_out3, convT2_out[:, :, :, :-2]), 1)
+        convT3_out = self.convT3(convT3_input)
+
+        convT4_input = torch.cat((conv_out2, convT3_out[:, :, :, :-2]), 1)
+        convT4_out = self.convT4(convT4_input)
+
+        convT5_input = torch.cat((conv_out1, convT4_out[:, :, :, :-1]), 1)
+        convT5_out = self.convT5(convT5_input)
+
+        mask_out = convT5_out[:, :, :, :-2]
+
+        mask_real = mask_out[:, 0, :, :]
+        mask_imag = mask_out[:, 1, :, :]
+
+        noisy_real = spec[:, 0, :, :]
+        noisy_imag = spec[:, 1, :, :]
+
+        ####### simple complex reconstruct
+
+        # B,T,F
+        enh_real = noisy_real * mask_real - noisy_imag * mask_imag
+        enh_imag = noisy_real * mask_imag + noisy_imag * mask_real
+
+        spec_out = torch.stack([enh_real, enh_imag], dim=1)
+        out = self.stft.inverse(spec_out)
+        return out
+
+
 if __name__ == "__main__":
     inputs = torch.randn(2, 16000)
     # inputs_ht = torch.randn(1, 1, 100, 257)
     inputs_ht = torch.tensor([[2, 4, 8, 16, 32, 64], [1, 2, 3, 4, 5, 6]])
 
-    net = MGAN_G(512, 256)
+    # net = MGAN_G(512, 256)
+    net = MGAN_G_VAD(512, 256)
 
     # out = net.expand_ht(inputs_ht, 10)
     out = net(inputs, inputs_ht)
