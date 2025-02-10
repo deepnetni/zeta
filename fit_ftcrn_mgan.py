@@ -11,7 +11,7 @@ import yaml
 from tqdm import tqdm
 
 from core.datasets_manager import get_datasets
-from core.rebuild.FTCRN import *
+from core.rebuild.fig6_baselines import *
 from core.utils.audiolib import audioread, audiowrite
 from core.utils.ini_opts import read_ini
 from core.utils.logger import cprint
