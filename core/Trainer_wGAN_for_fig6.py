@@ -1,7 +1,8 @@
 import os
 import sys
 
-sys.path.append(__file__.rsplit("/", 2)[0])
+# sys.path.append(__file__.rsplit("/", 2)[0])  # up two /
+sys.path.append(__file__.rsplit("/", 1)[0])  # up two /
 from typing import Dict, Optional, Tuple
 
 import numpy as np
@@ -15,20 +16,20 @@ from torch.utils.data import DataLoader, Dataset
 from torchmetrics.functional.audio.sdr import signal_distortion_ratio as SDR
 from tqdm import tqdm
 
-from core.models.APC_SNR.apc_snr import APC_SNR_multi_filter
-from core.models.conv_stft import STFT
-from core.models.pase.models.frontend import wf_builder
-from core.utils.audiolib import audiowrite
-from core.utils.check_flops import check_flops
-from core.utils.composite_metrics import eval_composite
-from core.utils.Engine import EngineGAN
-from core.utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation_vad
-from core.utils.HAids.PyHASQI.HASQI_revised import HASQI_v2
-from core.utils.losses import loss_phase, loss_pmsqe
-from core.utils.record import REC
-from core.utils.stft_loss import MultiResolutionSTFTLoss
-from core.utils.trunk_v2 import FIG6Trunk
-from core.utils.HAids.PyHASQI.preset_parameters import generate_filter_params
+from models.APC_SNR.apc_snr import APC_SNR_multi_filter
+from models.conv_stft import STFT
+from models.pase.models.frontend import wf_builder
+from utils.audiolib import audiowrite
+from utils.check_flops import check_flops
+from utils.composite_metrics import eval_composite
+from utils.Engine import EngineGAN
+from utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation_vad
+from utils.HAids.PyHASQI.HASQI_revised import HASQI_v2
+from utils.losses import loss_phase, loss_pmsqe
+from utils.record import REC
+from utils.stft_loss import MultiResolutionSTFTLoss
+from utils.trunk_v2 import FIG6Trunk
+from utils.HAids.PyHASQI.preset_parameters import generate_filter_params
 
 
 def pad_to_longest(batch):

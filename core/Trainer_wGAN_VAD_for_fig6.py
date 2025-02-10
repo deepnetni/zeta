@@ -1,10 +1,5 @@
 import os
 import sys
-
-from core.utils.losses import loss_pmsqe
-
-sys.path.append(__file__.rsplit("/", 2)[0])
-
 from typing import Dict, Optional, Tuple
 
 import numpy as np
@@ -17,10 +12,13 @@ from torch.utils.data import DataLoader, Dataset
 from torchmetrics.functional.audio.sdr import signal_distortion_ratio as SDR
 from tqdm import tqdm
 
-from core.Trainer_wGAN_for_fig6 import Trainer
-from core.utils.focal_loss import BCEFocalLoss
-from core.utils.record import REC
-from core.utils.HAids.PyHASQI.preset_parameters import generate_filter_params
+from Trainer_wGAN_for_fig6 import Trainer
+from utils.focal_loss import BCEFocalLoss
+from utils.HAids.PyHASQI.preset_parameters import generate_filter_params
+from utils.losses import loss_pmsqe
+from utils.record import REC
+
+# sys.path.append(__file__.rsplit("/", 1)[0])
 
 
 def vad_to_frames(vad: Tensor, nframe: int, nhop: int):

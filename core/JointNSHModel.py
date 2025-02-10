@@ -1,27 +1,25 @@
 import sys
 from typing import List, Union
 
+import einops
 import torch
 import torch.nn as nn
-from torch import Size, Tensor
-import einops
 from einops.layers.torch import Rearrange
+from torch import Size, Tensor
 
+sys.path.append(__file__.rsplit("/", 1)[0])
 
-sys.path.append(__file__.rsplit("/", 2)[0])
-
-from core.utils.register import tables
-
-from models.conformer import GLU, FeedForward, Scale, PreNorm
+from models.conformer import GLU, FeedForward, PreNorm, Scale
 from models.conv_stft import STFT
 from models.FTConformerBLK import (
     ConditionalFTConformer,
-    FTConformer,
     ConditionalFTConformer_,
+    FTConformer,
     FTDiTConformer,
 )
 from models.Fusion.ms_cam import AFF
 from models.gumbel_vector_quantizer import GumbelVectorQuantizer
+from utils.register import tables
 
 
 def expand_HT(ht: torch.Tensor, T: int, reso) -> torch.Tensor:

@@ -11,8 +11,6 @@ import yaml
 from tqdm import tqdm
 
 from core.datasets_manager import get_datasets
-from core.JointNSHModel import *
-from core.rebuild.FTCRN import Discriminator
 from core.Trainer_wGAN_for_fig6 import (
     Trainer,
     TrainerGumbelCodebook,
@@ -23,10 +21,10 @@ from core.utils.audiolib import audioread, audiowrite
 from core.utils.ini_opts import read_ini
 from core.utils.logger import cprint
 from core.utils.register import tables
-from core.rebuild.FTCRN import *
-
 
 warnings.filterwarnings("ignore", category=UserWarning, module="torch")
+from core.fig6_baselines import *
+from core.JointNSHModel import *
 
 
 @dataclass

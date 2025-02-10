@@ -9,16 +9,18 @@ from core.utils.trunk import *
 from core.utils.trunk_v2 import *
 
 
-def get_datasets(name: str, conf: Optional[Dict] = None):
+def get_datasets(name: str, yaml_f: str = "datasets.yaml"):
     """
     name: format `dataset_fucntion` different funsions split with the `_` character.
     return: train, valid, test
     """
-    data_yaml_f = os.path.join(os.path.dirname(__file__), "datasets.yaml")
+
+    data_yaml_f = os.path.join(os.path.dirname(__file__), yaml_f)
     with open(data_yaml_f, "r") as fp:
         cfg = yaml.load(fp, Loader=yaml.FullLoader)
 
-    conf = cfg[name.split("_")[0]] if conf is None else conf
+    # conf = cfg[name.split("_")[0]] if conf is None else conf
+    conf = cfg[name.split("_")[0]]
     cprint.y(f"using {name} dataset")
 
     train, valid, vtest = None, None, None

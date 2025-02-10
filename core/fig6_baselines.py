@@ -1,12 +1,11 @@
 import torch
+from einops.layers.torch import Rearrange
 from torch import Tensor, nn
 
-from einops.layers.torch import Rearrange
+from JointNSHModel import HLModule
 from models.conv_stft import STFT
 from utils.check_flops import check_flops
 from utils.register import tables
-from einops.layers.torch import Rearrange
-from core.JointNSHModel import HLModule
 
 
 def expand_HT(ht: torch.Tensor, T: int, reso):
