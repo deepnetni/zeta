@@ -465,7 +465,6 @@ class BaselineLinear(nn.Module):
         nbin = nframe // 2 + 1
         assert 250 % self.reso == 0
         self.freqs = torch.linspace(0, fs // 2, nbin)
-
         self.hl_process = HLModule(nbin=nbin, HL_freq_extend=self.freqs)
 
         self.encoder = DenseEncoder(in_channel=3, channels=mid_channel)
@@ -1442,9 +1441,9 @@ if __name__ == "__main__":
     # net = BaselineGumbelCodebook(512, 256, 48, 2)
     # net = BaselineXkConditionalConformer(512, 256, 48, 2)
     # net = BaselineConditionalConformer(512, 256, 48, 2)
-    net = DiTConformer(512, 256, 48, 2)
-    # net = BaselineVAD(512, 256, 48, 2)
-    out = net(inp, hl)
+    # net = DiTConformer(512, 256, 48, 2)
+    net = BaselineVAD(512, 256, 48, 2)
+    out, _ = net(inp, hl)
     print(out.shape)
 
     check_flops(net, inp, hl)

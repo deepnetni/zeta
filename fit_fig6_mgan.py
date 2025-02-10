@@ -30,7 +30,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="torch")
 @dataclass
 class Eng_conf:
     name: str = "baseline_fig6"
-    epochs: int = 30
+    epochs: int = 25
     desc: str = ""
     info_dir: str = f"{Path.home()}/model_results_trunk/FIG6/fig6_GAN"
     resume: bool = True
@@ -42,7 +42,7 @@ class Eng_conf:
     vtest_outdir: str = "vtest"
     dsets_raw_metrics: str = "dset_metrics.json"
 
-    train_batch_sz: int = 6
+    train_batch_sz: int = 10  # 6(48)
     train_num_workers: int = 16
     valid_batch_sz: int = 12  # 12
     valid_num_workers: int = 16
@@ -54,7 +54,7 @@ class Eng_conf:
 class Model_conf:
     nframe: int = 512
     nhop: int = 256
-    mid_channel: int = 48
+    mid_channel: int = 36
     conformer_num: int = 2
 
 
