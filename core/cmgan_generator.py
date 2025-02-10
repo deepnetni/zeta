@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
-from .conformer import ConformerBlock
+from models.conformer import ConformerBlock
+
+from utils.check_flops import check_flops
 
 
 class DilatedDenseNet(nn.Module):
@@ -79,7 +81,7 @@ class TSCB(nn.Module):
         super(TSCB, self).__init__()
         self.time_conformer = ConformerBlock(
             dim=num_channel,
-            dim_head=num_channel // 4,
+            # dim_head=num_channel // 4,
             heads=4,
             conv_kernel_size=31,
             attn_dropout=0.2,
@@ -87,7 +89,7 @@ class TSCB(nn.Module):
         )
         self.freq_conformer = ConformerBlock(
             dim=num_channel,
-            dim_head=num_channel // 4,
+            # dim_head=num_channel // 4,
             heads=4,
             conv_kernel_size=31,
             attn_dropout=0.2,
@@ -97,9 +99,11 @@ class TSCB(nn.Module):
     def forward(self, x_in):
         b, c, t, f = x_in.size()
         x_t = x_in.permute(0, 3, 2, 1).contiguous().view(b * f, t, c)
-        x_t = self.time_conformer(x_t) + x_t
+        x_, _ = self.time_conformer(x_t)
+        x_t = x_t + x_
         x_f = x_t.view(b, f, t, c).permute(0, 2, 1, 3).contiguous().view(b * t, f, c)
-        x_f = self.freq_conformer(x_f) + x_f
+        x_, _ = self.freq_conformer(x_f)
+        x_f = x_f + x_
         x_f = x_f.view(b, t, f, c).permute(0, 3, 1, 2)
         return x_f
 
@@ -109,9 +113,7 @@ class SPConvTranspose2d(nn.Module):
         super(SPConvTranspose2d, self).__init__()
         self.pad1 = nn.ConstantPad2d((1, 1, 0, 0), value=0.0)
         self.out_channels = out_channels
-        self.conv = nn.Conv2d(
-            in_channels, out_channels * r, kernel_size=kernel_size, stride=(1, 1)
-        )
+        self.conv = nn.Conv2d(in_channels, out_channels * r, kernel_size=kernel_size, stride=(1, 1))
         self.r = r
 
     def forward(self, x):
@@ -171,16 +173,12 @@ class TSCNet(nn.Module):
         self.TSCB_3 = TSCB(num_channel=num_channel)
         self.TSCB_4 = TSCB(num_channel=num_channel)
 
-        self.mask_decoder = MaskDecoder(
-            num_features, num_channel=num_channel, out_channel=1
-        )
+        self.mask_decoder = MaskDecoder(num_features, num_channel=num_channel, out_channel=1)
         self.complex_decoder = ComplexDecoder(num_channel=num_channel)
 
     def forward(self, x):
         mag = torch.sqrt(x[:, 0, :, :] ** 2 + x[:, 1, :, :] ** 2).unsqueeze(1)
-        noisy_phase = torch.angle(
-            torch.complex(x[:, 0, :, :], x[:, 1, :, :])
-        ).unsqueeze(1)
+        noisy_phase = torch.angle(torch.complex(x[:, 0, :, :], x[:, 1, :, :])).unsqueeze(1)
         x_in = torch.cat([mag, x], dim=1)
 
         out_1 = self.dense_encoder(x_in)
@@ -205,3 +203,5 @@ if __name__ == "__main__":
     net = TSCNet()
     inp = torch.randn(1, 2, 10, 201)
     out = net(inp)
+
+    check_flops(net, inp)

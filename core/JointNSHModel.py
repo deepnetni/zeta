@@ -7,6 +7,7 @@ from torch import Size, Tensor
 import einops
 from einops.layers.torch import Rearrange
 
+
 sys.path.append(__file__.rsplit("/", 2)[0])
 
 from core.utils.register import tables
@@ -1074,9 +1075,9 @@ class BaselineConditionalConformer(nn.Module):
 
         # xk_b: b,t,16; hl_b: b,t,16
         hl_b = self.preprocess.extend_with_linear(HL)  # b,1,1,f
-        hl_b = self.mlp(hl_b)  # b,1,1,f
+        hl_b = self.mlp(hl_b)  # b,c,1,f
         # hl_b = hl_b.view(-1, hl_b.size(-1))  # b,mch
-        hl_b = hl_b.squeeze(2)
+        hl_b = hl_b.squeeze(2)  # b,t,mch
 
         # b,16,t,f
         # xk_hl, _ = self.hl_attn(xk, hl_b)
@@ -1439,7 +1440,7 @@ if __name__ == "__main__":
 
     # net = BaselineHLCodec(512, 256, 48, 2)
     # net = BaselineGumbelCodebook(512, 256, 48, 2)
-    # net = BaselineXkConditionalConformer(512, 256, 48, 2)
+    net = BaselineXkConditionalConformer(512, 256, 48, 2)
     # net = BaselineConditionalConformer(512, 256, 48, 2)
     # net = DiTConformer(512, 256, 48, 2)
     net = BaselineVAD(512, 256, 48, 2)

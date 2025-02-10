@@ -23,6 +23,8 @@ from core.utils.audiolib import audioread, audiowrite
 from core.utils.ini_opts import read_ini
 from core.utils.logger import cprint
 from core.utils.register import tables
+from core.rebuild.FTCRN import *
+
 
 warnings.filterwarnings("ignore", category=UserWarning, module="torch")
 
@@ -59,9 +61,16 @@ class Model_conf:
 
 
 @dataclass
+class FTCRN_conf:
+    nframe: int = 512
+    nhop: int = 256
+
+
+@dataclass
 class Conf:
     config: Eng_conf = Eng_conf()
     md_conf: Model_conf = Model_conf()
+    ftcrn_conf: FTCRN_conf = FTCRN_conf()
 
 
 def parse():
@@ -165,17 +174,22 @@ if __name__ == "__main__":
     elif md_name in [
         "baseline_fig6_vad",
         "condConformerVAD",
+        "FTCRN_VAD",
+        "FTCRN_BASE_VAD",
     ]:
         Trainer = TrainerVAD
     else:
-        Trainer = TrainerMultiOutputs
+        Trainer = Trainer
 
     print("Trainer Class: ", Trainer.__name__)
 
     cprint.r(f"current: {md_name}")
     model = tables.models.get(md_name)
     assert model is not None
-    net = model(**md_conf)
+    if "FTCRN" in md_name:
+        net = model(**cfg["ftcrn_conf"])
+    else:
+        net = model(**md_conf)
 
     if args.train:
         init = cfg["config"]

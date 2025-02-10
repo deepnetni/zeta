@@ -512,7 +512,7 @@ class DiTConformerBlock(nn.Module):
 if __name__ == "__main__":
     inp = torch.randn(2, 10, 20)
     cond = torch.randn(2, 1, 20)
-    # net = ConformerBlock(dim=20, heads=4)
-    net = DiTConformerBlock(dim=20, heads=4)
+    net = ConformerBlock(dim=20, heads=4)
+    # net = DiTConformerBlock(dim=20, heads=4)
     out, attn = net(inp, cond)
     print(out.shape, attn.shape)
