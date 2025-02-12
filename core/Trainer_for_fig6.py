@@ -1,7 +1,8 @@
 import os
 import sys
 
-sys.path.append(__file__.rsplit("/", 2)[0])
+sys.path.append(__file__.rsplit("/", 1)[0])
+
 from typing import Dict, Optional, Tuple
 
 import numpy as np
@@ -14,19 +15,21 @@ from torch.utils.data import DataLoader, Dataset
 from torchmetrics.functional.audio.sdr import signal_distortion_ratio as SDR
 from tqdm import tqdm
 
-from core.models.APC_SNR.apc_snr import APC_SNR_multi_filter
-from core.models.conv_stft import STFT
-from core.models.pase.models.frontend import wf_builder
-from core.utils.audiolib import audiowrite
-from core.utils.check_flops import check_flops
-from core.utils.composite_metrics import eval_composite
-from core.utils.Engine import Engine
-from core.utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation_vad
-from core.utils.HAids.PyHASQI.HASQI_revised import HASQI_v2
-from core.utils.losses import loss_pmsqe
-from core.utils.record import REC
-from core.utils.stft_loss import MultiResolutionSTFTLoss
-from core.utils.trunk_v2 import FIG6Trunk
+from CompNet import ComMagEuclideanLoss, MagEuclideanLoss
+from models.APC_SNR.apc_snr import APC_SNR_multi_filter
+from models.conv_stft import STFT
+from models.pase.models.frontend import wf_builder
+from utils.audiolib import audiowrite
+from utils.check_flops import check_flops
+from utils.composite_metrics import eval_composite
+from utils.Engine import Engine
+from utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation_vad
+from utils.HAids.PyHASQI.HASQI_revised import HASQI_v2
+from utils.HAids.PyHASQI.preset_parameters import generate_filter_params
+from utils.losses import loss_pmsqe, loss_sisnr
+from utils.record import REC
+from utils.stft_loss import MultiResolutionSTFTLoss
+from utils.trunk_v2 import FIG6Trunk
 
 
 def pad_to_longest(batch):
@@ -400,6 +403,8 @@ class Trainer(Engine):
             leave=True,
             desc=f"Epoch-{epoch}/{self.epochs}",
         )
+        generate_filter_params(119808)
+        skip_count = 0
         for mic, sph, HL in pbar:
             mic = mic.to(self.device)  # B,T
             sph = sph.to(self.device)  # B,T
@@ -410,11 +415,24 @@ class Trainer(Engine):
             enh, loss, loss_dict = self._fit_generator_step(mic, HL, sph=sph)
 
             loss.backward()
-            # torch.nn.utils.clip_grad_norm_(self.net.parameters(), 3, 2)
-            self.optimizer.step()
+            torch.nn.utils.clip_grad_norm_(self.net.parameters(), 5.0)
+
+            has_nan_inf = 0
+            for params in self.net.parameters():
+                if params.requires_grad:
+                    has_nan_inf += torch.sum(torch.isnan(params.grad))
+                    has_nan_inf += torch.sum(torch.isinf(params.grad))
+            if has_nan_inf == 0:
+                self.optimizer.step()
+            else:
+                skip_count += 1
+
+            # self.optimizer.step()
             losses_rec.update(loss_dict)
 
-            pbar.set_postfix(**losses_rec.state_dict())
+            show_state = losses_rec.state_dict()
+            show_state.update({"c": skip_count})
+            pbar.set_postfix(**show_state)
 
         return losses_rec.state_dict()
 
@@ -430,6 +448,7 @@ class Trainer(Engine):
 
         draw = False
 
+        generate_filter_params(119808)
         for mic, sph, HL, nlen in pbar:
             mic = mic.to(self.device)  # B,T,6
             sph = sph.to(self.device)  # b,c,t,f
@@ -474,6 +493,7 @@ class Trainer(Engine):
         # vtest_outdir = os.path.join(self.vtest_outdir, dirname)
         # shutil.rmtree(vtest_outdir) if os.path.exists(vtest_outdir) else None
 
+        generate_filter_params(240000)
         for mic, sph, HL, nlen in pbar:
             mic = mic.to(self.device)  # B,T,6
             sph = sph.to(self.device)  # b,c,t,f
@@ -517,8 +537,9 @@ class Trainer(Engine):
             mic = mic.to(self.device)  # B,T,6
             HL = HL.to(self.device)  # B,6
 
-            with torch.no_grad():
-                enh = self.net(mic, HL)
+            enh = self._predict_step(mic, HL)
+            # with torch.no_grad():
+            #     enh = self.net(mic, HL)
 
             N = enh.shape[-1]
             audiowrite(
@@ -553,7 +574,7 @@ class Trainer(Engine):
         return flops
 
 
-class TrainerMultiOutputs(Trainer):
+class TrainerCompNet(Trainer):
     def __init__(
         self,
         train_dset: Dataset,
@@ -564,33 +585,61 @@ class TrainerMultiOutputs(Trainer):
         **kwargs,
     ):
         super().__init__(train_dset, valid_dset, vtest_dset, train_batch_sz, vpred_dset, **kwargs)
+        self.mag_loss_fn = MagEuclideanLoss("L2")
+        self.com_mag_loss_fn = ComMagEuclideanLoss(0.5, "L2")
+
+    def _predict_step(self, *inputs) -> Tensor:
+        mic, HL = inputs
+        with torch.no_grad():
+            _, enh = self.net(mic, HL)  # B,T
+
+        return enh
+
+    def loss(self, sph, enh, model_output):
+        sph_xk = torch.stft(
+            sph,
+            512,
+            256,
+            512,
+            window=torch.sqrt(torch.hann_window(512).to(sph.device)),
+            return_complex=True,
+        )  # B,F,T
+        sph_mag = torch.abs(sph_xk).permute(0, 2, 1) ** 0.5  # B,T,F
+        sph_spec = torch.stack([sph_xk.real, sph_xk.imag], dim=1).permute(0, 1, 3, 2)  # B,2,T,F
+
+        esti_wav, esti_mag, post_x = model_output
+        sisnr_lv = loss_sisnr(sph, esti_wav)
+        mag_lv = self.mag_loss_fn(esti_mag, sph_mag)
+        com_mag_lv = self.com_mag_loss_fn(post_x, sph_spec)
+
+        # if torch.isnan(sisnr_lv) or torch.isnan(com_mag_lv):
+        #     print(sisnr_lv, com_mag_lv, torch.isnan(esti_wav))
+
+        loss = 0.2 * sisnr_lv + com_mag_lv + 0.5 * mag_lv
+
+        loss_dict = {
+            "loss": loss,
+            "sisnr": 0.2 * sisnr_lv.detach(),
+            "mag_lv": 0.5 * mag_lv.detach(),
+            "com_mag_lv": com_mag_lv.detach(),
+        }
+
+        return loss_dict
 
     def _fit_generator_step(self, *inputs, sph):
         mic, HL = inputs
-        enh, cbi, cb = self.net(mic, HL)  # B,T
+        model_output, enh = self.net(mic, HL)  # B,T
         sph = sph[..., : enh.size(-1)]
-        loss_dict = self.loss_fn_apc_denoise(sph, enh)
-
-        loss_embedding = F.mse_loss(cb, cbi.detach())
-        loss_commitment = F.mse_loss(cbi, cb.detach())
-
-        loss = loss_dict["loss"] + 0.25 * loss_commitment + loss_embedding
-        loss_dict.update(
-            {
-                "loss_emb": loss_embedding.detach(),
-                "loss_com": 0.25 * loss_commitment.detach(),
-            }
-        )
+        # loss_dict = self.loss_fn_apc_denoise(sph, enh)
+        loss_dict = self.loss(sph, enh, model_output)
+        loss = loss_dict["loss"]
 
         return enh, loss, loss_dict
 
     def _valid_step(self, *inps, sph, nlen) -> Tuple[Tensor, Dict]:
         mic, HL = inps
         with torch.no_grad():
-            enh, cbi, cb = self.net(mic, HL)  # B,T,M
-
-        loss_embedding = F.mse_loss(cb, cbi.detach())
-        loss_commitment = F.mse_loss(cbi, cb.detach())
+            model_output, enh = self.net(mic, HL)  # B,T
 
         metric_dict = self.valid_fn(sph, enh, nlen)
         hasqi_score = self.batch_hasqi_score(sph, enh, HL)
@@ -599,42 +648,6 @@ class TrainerMultiOutputs(Trainer):
         else:
             hasqi_score = torch.tensor(0.0)
 
-        metric_dict.update(
-            {
-                "HASQI": hasqi_score,
-                "embedding": loss_embedding.detach(),
-                "commitment": 0.25 * loss_commitment.detach(),
-            }
-        )
+        metric_dict.update({"HASQI": hasqi_score})
 
         return enh, metric_dict
-
-    def prediction_per_epoch(self, epoch):
-        # outdir = super().prediction_per_epoch(epoch)
-        self.net.eval()
-        outdir = str(self.epoch_pred_dir / str(epoch))
-
-        idx = 0
-        for mic, HL, fname in self.vpred_dset:
-            if idx >= 20:
-                break
-
-            mic = mic.to(self.device)  # B,T,6
-            HL = HL.to(self.device)  # B,6
-
-            with torch.no_grad():
-                enh, _, _ = self.net(mic, HL)
-
-            N = enh.shape[-1]
-            audiowrite(
-                f"{outdir}/{fname}",
-                np.stack(
-                    [
-                        mic.squeeze().cpu().numpy()[:N],
-                        enh.squeeze().cpu().numpy(),
-                    ],
-                    axis=-1,
-                ),
-                self.fs,
-            )
-            idx += 1

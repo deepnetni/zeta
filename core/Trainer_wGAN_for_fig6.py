@@ -16,6 +16,7 @@ from torch.utils.data import DataLoader, Dataset
 from torchmetrics.functional.audio.sdr import signal_distortion_ratio as SDR
 from tqdm import tqdm
 
+from CompNet import ComMagEuclideanLoss, MagEuclideanLoss
 from models.APC_SNR.apc_snr import APC_SNR_multi_filter
 from models.conv_stft import STFT
 from models.pase.models.frontend import wf_builder
@@ -25,11 +26,11 @@ from utils.composite_metrics import eval_composite
 from utils.Engine import EngineGAN
 from utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation_vad
 from utils.HAids.PyHASQI.HASQI_revised import HASQI_v2
-from utils.losses import loss_phase, loss_pmsqe
+from utils.HAids.PyHASQI.preset_parameters import generate_filter_params
+from utils.losses import loss_phase, loss_pmsqe, loss_sisnr
 from utils.record import REC
 from utils.stft_loss import MultiResolutionSTFTLoss
 from utils.trunk_v2 import FIG6Trunk
-from utils.HAids.PyHASQI.preset_parameters import generate_filter_params
 
 
 def pad_to_longest(batch):
@@ -966,3 +967,169 @@ class TrainerGumbelCodebook(Trainer):
         )
 
         return enh, metric_dict
+
+
+class TrainerCompNetGAN(Trainer):
+    def __init__(
+        self,
+        train_dset: Dataset,
+        valid_dset: Dataset,
+        vtest_dset: Dataset,
+        train_batch_sz: int,
+        vpred_dset: Optional[Dataset] = None,
+        **kwargs,
+    ):
+        super().__init__(train_dset, valid_dset, vtest_dset, train_batch_sz, vpred_dset, **kwargs)
+        self.mag_loss_fn = MagEuclideanLoss("L2")
+        self.com_mag_loss_fn = ComMagEuclideanLoss(0.5, "L2")
+
+    def _predict_step(self, *inputs) -> Tensor:
+        mic, HL = inputs
+        with torch.no_grad():
+            _, enh = self.net(mic, HL)  # B,T
+
+        return enh
+
+    def loss_fn(self, sph, enh, model_output):
+        sph_xk = torch.stft(
+            sph,
+            512,
+            256,
+            512,
+            window=torch.sqrt(torch.hann_window(512).to(sph.device)),
+            return_complex=True,
+        )  # B,F,T
+        sph_mag = torch.abs(sph_xk).permute(0, 2, 1) ** 0.5  # B,T,F
+        sph_spec = torch.stack([sph_xk.real, sph_xk.imag], dim=1).permute(0, 1, 3, 2)  # B,2,T,F
+
+        esti_wav, esti_mag, post_x = model_output
+        sisnr_lv = loss_sisnr(sph, esti_wav)
+        mag_lv = self.mag_loss_fn(esti_mag, sph_mag)
+        com_mag_lv = self.com_mag_loss_fn(post_x, sph_spec)
+
+        loss = 0.05 * sisnr_lv + 0.5 * com_mag_lv + mag_lv
+
+        loss_dict = {
+            "loss": loss,
+            "sisnr": 0.05 * sisnr_lv.detach(),
+            "mag_lv": mag_lv.detach(),
+            "com_mag_lv": 0.5 * com_mag_lv.detach(),
+        }
+
+        return loss_dict
+
+    def _fit_generator_step(self, *inputs, sph, one_labels):
+        mic, HL = inputs
+        model_output, enh = self.net(mic, HL)  # B,T
+        sph = sph[..., : enh.size(-1)]
+        loss_dict = self.loss_fn(sph, enh, model_output)
+
+        fake_metric = self.net_D(sph, enh, HL)
+        loss_GAN = F.mse_loss(fake_metric.flatten(), one_labels)
+
+        loss = loss_dict["loss"] + loss_GAN
+        loss_dict.update(
+            {
+                "loss_G": loss_GAN.detach(),
+            }
+        )
+
+        return enh, loss, loss_dict
+
+    def _fit_discriminator_step(self, *inputs, sph, one_labels):
+        enh, HL = inputs
+        max_metric = self.net_D(sph, sph, HL)
+        pred_metric = self.net_D(sph, enh.detach(), HL)
+
+        hasqi_score = self.batch_hasqi_score(sph, enh, HL)
+        if hasqi_score is not None:
+            loss_D = F.mse_loss(pred_metric.flatten(), hasqi_score) + F.mse_loss(
+                max_metric.flatten(), one_labels
+            )
+        else:
+            loss_D = None
+
+        return loss_D
+
+    def _valid_step(self, *inps, sph, nlen) -> Tuple[Tensor, Dict]:
+        mic, HL = inps
+        with torch.no_grad():
+            model_output, enh = self.net(mic, HL)  # B,T
+
+        metric_dict = self.valid_fn(sph, enh, nlen)
+        hasqi_score = self.batch_hasqi_score(sph, enh, HL)
+        if hasqi_score is not None:
+            hasqi_score = hasqi_score.mean()
+        else:
+            hasqi_score = torch.tensor(0.0)
+
+        metric_dict.update(
+            {
+                "HASQI": hasqi_score,
+            }
+        )
+
+        return enh, metric_dict
+
+    def _fit_each_epoch(self, epoch):
+        losses_rec = REC()
+
+        if hasattr(self.net, "setup_num"):
+            self.net.setup_num(epoch)
+
+        pbar = tqdm(
+            self.train_loader,
+            # ncols=160,
+            leave=True,
+            desc=f"Epoch-{epoch}/{self.epochs}",
+        )
+
+        generate_filter_params(119808)
+        skip_count = 0
+        for mic, sph, HL in pbar:
+            mic = mic.to(self.device)  # B,T
+            sph = sph.to(self.device)  # B,T
+            HL = HL.to(self.device)  # B,6
+            one_labels = torch.ones(mic.shape[0]).float().cuda()  # B,
+
+            ###################
+            # Train Generator #
+            ###################
+            self.optimizer.zero_grad()
+
+            enh, loss, loss_dict = self._fit_generator_step(mic, HL, sph=sph, one_labels=one_labels)
+
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.net.parameters(), 5.0)
+            has_nan_inf = 0
+            for params in self.net.parameters():
+                if params.requires_grad:
+                    has_nan_inf += torch.sum(torch.isnan(params.grad))
+                    has_nan_inf += torch.sum(torch.isinf(params.grad))
+            if has_nan_inf == 0:
+                self.optimizer.step()
+            else:
+                skip_count += 1
+
+            losses_rec.update(loss_dict)
+
+            #######################
+            # Train Discriminator #
+            #######################
+            self.optimizer_D.zero_grad()
+            loss_D = self._fit_discriminator_step(enh, HL, sph=sph, one_labels=one_labels)
+            if loss_D is not None:
+                loss_D.backward()
+                # torch.nn.utils.clip_grad_norm_(self.net.parameters(), 3, 2)
+                self.optimizer_D.step()
+            else:
+                loss_D = torch.tensor([0.0])
+
+            losses_rec.update({"loss_D": loss_D.detach()})
+
+            # pbar.set_postfix(**losses_rec.state_dict())
+            show_state = losses_rec.state_dict()
+            show_state.update({"c": skip_count})
+            pbar.set_postfix(**show_state)
+
+        return losses_rec.state_dict()

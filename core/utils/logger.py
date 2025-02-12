@@ -62,31 +62,32 @@ def get_logger(
     """
 
     logger = logging.getLogger(name)
-    logger.setLevel(level)
-    fmt = logging.Formatter(fmt=fmt_msg, datefmt=fmt_date)
+    if not logger.handlers:
+        logger.setLevel(level)
+        fmt = logging.Formatter(fmt=fmt_msg, datefmt=fmt_date)
 
-    if mode == "file":
-        if dirname is None:
-            dirname = os.path.join(os.getcwd(), "logs")
+        if mode == "file":
+            if dirname is None:
+                dirname = os.path.join(os.getcwd(), "logs")
+            else:
+                dirname = os.path.join(dirname, "logs")
+
+            if not os.path.exists(dirname):
+                os.mkdir(dirname)
+
+            filename = os.path.join(dirname, time.strftime("%Y-%m-%d-") + name + ".log")
+
+            if os.path.exists(filename):
+                os.remove(filename)
+
+            handler = logging.FileHandler(filename)
+        elif mode == "console":
+            handler = logging.StreamHandler(sys.stdout)
         else:
-            dirname = os.path.join(dirname, "logs")
+            raise RuntimeError(f"{mode} not supported.")
 
-        if not os.path.exists(dirname):
-            os.mkdir(dirname)
-
-        filename = os.path.join(dirname, time.strftime("%Y-%m-%d-") + name + ".log")
-
-        if os.path.exists(filename):
-            os.remove(filename)
-
-        handler = logging.FileHandler(filename)
-    elif mode == "console":
-        handler = logging.StreamHandler(sys.stdout)
-    else:
-        raise RuntimeError(f"{mode} not supported.")
-
-    handler.setFormatter(fmt)
-    logger.addHandler(handler)
+        handler.setFormatter(fmt)
+        logger.addHandler(handler)
 
     return logger
 
