@@ -54,7 +54,7 @@ class Eng_conf:
 class Model_conf:
     nframe: int = 512
     nhop: int = 256
-    mid_channel: int = 36
+    mid_channel: int = 48  # 48, 36
     conformer_num: int = 2
 
 
