@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+import shutil
 import warnings
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -55,7 +56,7 @@ class Model_conf:
     nframe: int = 512
     nhop: int = 256
     mid_channel: int = 48  # 48, 36
-    conformer_num: int = 2
+    conformer_num: int = 2  # 2
 
 
 @dataclass
@@ -77,7 +78,7 @@ def parse():
     parser.add_argument("--train", help="train mode", action="store_true", default=True)
     parser.add_argument("--pred", help="predict mode", action="store_true")
 
-    parser.add_argument("--ckpt", help="ckpt path", type=str)
+    parser.add_argument("--ckpt", help="ckpt path", type=str, default="25")
     parser.add_argument("--epoch", help="epoch", type=int)
     parser.add_argument("--src", help="input directory", type=str)
     parser.add_argument("--out", help="predicting output directory", type=str)
@@ -147,16 +148,17 @@ if __name__ == "__main__":
     md_conf = cfg["md_conf"]
     md_name = cfg["config"]["name"]
 
-    if args.small:
-        if args.vad:
-            train_dset, valid_dset, vtest_dset = get_datasets("FIG6smallVad_SIG")
-        else:
-            train_dset, valid_dset, vtest_dset = get_datasets("FIG6small_SIG")
+    if args.vad:
+        dset_name = "FIG6Vad_SIG"
     else:
-        if args.vad:
-            train_dset, valid_dset, vtest_dset = get_datasets("FIG6Vad_SIG")
-        else:
-            train_dset, valid_dset, vtest_dset = get_datasets("FIG6_SIG")
+        dset_name = "FIG6_SIG"
+
+    # if args.small:
+    #     if args.vad:
+    #         train_dset, valid_dset, vtest_dset = get_datasets("FIG6smallVad_SIG")
+    #     else:
+    #         train_dset, valid_dset, vtest_dset = get_datasets("FIG6small_SIG")
+    train_dset, valid_dset, vtest_dset = get_datasets(dset_name)
 
     if md_name in [
         "baseline_fig6",
@@ -207,28 +209,58 @@ if __name__ == "__main__":
         eng.fit()
 
     elif args.pred:  # pred
-        assert args.ckpt is not None
-        assert args.out is not None
-        net.load_state_dict(torch.load(args.ckpt))
-        net.cuda()
-        net.eval()
+        # assert args.ckpt is not None
+        # assert args.out is not None
+
+        if args.root_save_dir is None:
+            base_dir = Path(cfg["config"]["info_dir"]) / md_name
+        else:
+            base_dir = Path(cfg["config"]["info_dir"]) / args.root_save_dir
+
+        if not base_dir.exists():
+            raise RuntimeError(f"{base_dir} not exists.")
 
         if args.valid:
+            out_dir: Path = base_dir / "output"
             dset = valid_dset
         elif args.vtest:
+            out_dir: Path = base_dir / "output"
             dset = vtest_dset
         else:
             raise RuntimeError("not supported.")
 
+        cprint.y(f"output:{out_dir}")
+
+        if os.path.isabs(args.ckpt) and os.path.isfile(args.ckpt):
+            ckpt_file = args.ckpt
+        else:
+            ckpt_file = base_dir / "checkpoints" / f"epoch_{args.ckpt:0>4}.pth"
+
+        net.load_state_dict(torch.load(ckpt_file)["net"])
+        net.cuda()
+        net.eval()
+
+        check = 0
         for d, HL, fname in tqdm(dset):
+            fout = os.path.join(str(out_dir), fname)
+            outd = os.path.dirname(fout)
+            if check == 0:
+                if not os.path.exists(outd):
+                    os.makedirs(outd)
+                else:
+                    break
+                check = 1
+
             d = d.cuda()
             HL = HL.cuda()
 
-            with torch.no_grad():
-                out = net(d, HL)
+            if args.vad:
+                with torch.no_grad():
+                    out, vad = net(d, HL)
+            else:
+                with torch.no_grad():
+                    out = net(d, HL)
+
             out = out.cpu().detach().squeeze().numpy()
 
-            fout = os.path.join(args.out, fname)
-            outd = os.path.dirname(fout)
-            os.makedirs(outd) if not os.path.exists(outd) else None
             audiowrite(fout, out, sample_rate=16000)

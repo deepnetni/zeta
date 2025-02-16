@@ -356,6 +356,7 @@ class FIG6Trunk(TrunkBasic):
 
     def __next__(self) -> Tuple[torch.Tensor, torch.Tensor, str]:
         """used for predict api
+        fname should contain the dataset name.
         return: data, relative path
         """
         if self.pick_idx < len(self.f_list):

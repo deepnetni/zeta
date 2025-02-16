@@ -95,7 +95,7 @@ def to_excel(data: dict, excel_f: str):
             df.to_excel(writer, sheet_name=m, index=False)
 
 
-@mpStarMap(5)
+@mpStarMap(1)
 def compute_score(spath, epath, args):
     """
     return: [v,v..] or [{'v1':v,'v2'..}, {...}]
@@ -106,6 +106,7 @@ def compute_score(spath, epath, args):
     # print(edata.shape) if edata.ndim > 1 else None
     # edata = edata.mean(-1) if edata.ndim > 1 else edata
     edata = edata[:, 0] if edata.ndim > 1 else edata
+    sdata = sdata[:, 0] if sdata.ndim > 1 else sdata
     sdata = sdata[: len(edata)]
     # edata = np.concatenate([np.zeros(15), sdata[: len(edata) - 15]])
 
@@ -270,7 +271,7 @@ if __name__ == "__main__":
             src_l = [f.replace(str(dirp), args.src) for f in dst_l]
 
             if args.map is not None:
-                dst_l = [f.replace(*args.map) for f in dst_l]
+                src_l = [f.replace(*args.map) for f in src_l]
 
             score_l = compute_score(src_l, dst_l, args=args)
             score = compute_mean_std(score_l)

@@ -6,7 +6,7 @@ import numpy as np
 from librosa import istft, stft
 from scipy.interpolate import interp1d
 from scipy.signal import get_window
-from core.utils.vad import VAD
+from utils.vad import VAD
 
 
 def HL_LinearFitting(src, freq, ht, hearingNum):

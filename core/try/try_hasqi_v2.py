@@ -9,10 +9,10 @@ from utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation_vad
 
 # clean_path = __file__.rsplit("/", 2)[0] + "/utils/HAids/PyHASQI/TEST_wavs/clean_fig6_fileid_100.wav"
 # noisy_path = __file__.rsplit("/", 2)[0] + "/utils/HAids/PyHASQI/TEST_wavs/noisy_fig6_fileid_100.wav"
-clean_path = "/home/deepni/datasets/dns_wdrc/test/0_enlarge_target.wav"
-noisy_path = "/home/deepni/datasets/dns_wdrc/test/0_enlarge_nearend.wav"
+clean_path = "/home/deepnetni/trunk/dns_wdrc/test/0_enlarge_target.wav"
+noisy_path = "/home/deepnetni/trunk/dns_wdrc/test/0_enlarge_nearend.wav"
 # noisy_path = "/home/deepni/datasets/dns_wdrc/test/0_enlarge_transform.wav"
-hl_f = "/home/deepni/datasets/dns_wdrc/test/0_enlarge.json"
+hl_f = "/home/deepnetni/trunk/dns_wdrc/test/0_enlarge.json"
 
 with open(hl_f, "r") as fp:
     ctx = json.load(fp)

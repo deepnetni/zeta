@@ -61,7 +61,7 @@ def HASQI_v2(x, fx, y, fy, HL, eq=2, Level1=65):
     return Combined
 
 
-def HASQI_v2_for_unfixedLen(x, fx, y, fy, HL, eq, Level1):
+def HASQI_v2_for_unfixedLen(x, fx, y, fy, HL, eq=2, Level1=65):
     xenv, xBM, yenv, yBM, xSL, ySL, fsamp = eb_EarModel_compute_origin(x, fx, y, fy, HL, eq, Level1)
     segsize = 16
     xdB = eb_EnvSmooth(xenv, segsize, fsamp)

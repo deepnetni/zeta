@@ -1105,7 +1105,7 @@ class BaselineConditionalConformer(nn.Module):
 
 
 @tables.register("models", "IterCondConformer")
-class BaselineConditionalConformer(nn.Module):
+class BaselineConditionalConformerIter(nn.Module):
     def __init__(
         self, nframe: int, nhop: int, mid_channel: int = 64, conformer_num=4, fs=16000
     ) -> None:

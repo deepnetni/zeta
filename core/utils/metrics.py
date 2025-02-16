@@ -5,6 +5,7 @@ from pesq import pesq
 from pystoi import stoi
 
 from typing import Callable, Dict, List, Optional, Union
+from utils.HAids.PyHASQI.HASQI_revised import HASQI_v2_for_unfixedLen, HASQI_v2
 
 
 # def l2_norm(s, keepdim=False):
@@ -207,6 +208,14 @@ def compute_precision_and_recall(lbl: np.ndarray, est: np.ndarray):
     recall = TP / (TP + FN) if (TP + FN) > 0 else 0
 
     return precision, recall
+
+
+def compute_hasqi(sdata, edata, HL, fs):
+    sc = HASQI_v2_for_unfixedLen(sdata, fs, edata, fs, HL)
+    # sc = HASQI_v2(sdata, fs, edata, fs, HL)
+    if sc < 0:
+        sc = 0.0
+    return sc
 
 
 if __name__ == "__main__":

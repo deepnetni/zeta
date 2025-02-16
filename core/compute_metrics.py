@@ -1,8 +1,14 @@
 import argparse
+import warnings
+
+warnings.filterwarnings("ignore", category=UserWarning, module="torchvision.datapoints")
+warnings.filterwarnings("ignore", category=UserWarning, module="torchvision.transforms.v2")
+
 import json
 import os
 import re
 import sys
+import ast
 from itertools import repeat
 from pathlib import Path
 from typing import Dict, List
@@ -22,6 +28,9 @@ from utils.metrics import *
 from utils.mp_decoder import mpStarMap
 from utils.HAids.PyHASQI.HASQI_revised import HASQI_v2, HASQI_v2_for_unfixedLen
 
+# import torchvision
+# torchvision.disable_beta_transforms_warning()
+
 
 def parse():
     parser = argparse.ArgumentParser(
@@ -32,7 +41,7 @@ def parse():
     parser.add_argument("--src", help="src file or directory", type=str, default=None)
     parser.add_argument("--src_spec", help="src file or directory", type=str, default=None)
     parser.add_argument("--same", help="", default=False)
-    parser.add_argument("--pattern", help="noisy files", default=r"^(?!\.).*_mic\.wav$")
+    parser.add_argument("--pattern", help="noisy files", default=r"^(?!\.).*\.wav$")
 
     parser.add_argument("--out", help="dst file or directory", type=str)
     parser.add_argument("--fs", help="dst file or directory", type=int, default=16000)
@@ -117,8 +126,8 @@ def to_excel(data: dict, excel_f: str):
             df.to_excel(writer, sheet_name=m, index=False)
 
 
-@mpStarMap(5)
-def compute_score(spath, epath, args):
+@mpStarMap(5, leave=False)
+def compute_score(spath, epath, args, **kwargs):
     """Wrapped by the multiprocessing decoder.
     Input: spath, epath is a list.
     return: [{'m1':v,'m2'..}, {...}]
@@ -132,10 +141,15 @@ def compute_score(spath, epath, args):
     # print(edata.shape) if edata.ndim > 1 else None
     # edata = edata.mean(-1) if edata.ndim > 1 else edata
     edata = edata[:, 0] if edata.ndim > 1 else edata
+    sdata = sdata[:, 0] if sdata.ndim > 1 else sdata
     sdata = sdata[: len(edata)]
     # edata = np.concatenate([np.zeros(15), sdata[: len(edata) - 15]])
 
     metrics = {}
+
+    for ele in args.metrics:
+        if not hasattr(args, ele):
+            raise RuntimeWarning(f"{ele} metric not supported.")
 
     if args.sisnr or "sisnr" in args.metrics:
         metrics["sisnr"] = compute_si_snr(sdata, edata)
@@ -167,16 +181,17 @@ def compute_score(spath, epath, args):
         score, wer, stoi_sc = task1_metric(sdata, edata)
         metrics.update({"l3das_score": score, "l3das_wer": wer * 100, "l3das_stoi": stoi_sc})
 
+    if args.hasqi or "hasqi" in args.metrics:
+        dirp, fname = os.path.split(spath)
+        fname = fname.replace("_target.wav", ".json")
+        with open(os.path.join(dirp, fname), "r") as fp:
+            ctx = json.load(fp)
+            hl = ast.literal_eval(ctx["HL"])
+
+        sc = compute_hasqi(sdata, edata, hl, fs1)
+        metrics["hasqi"] = sc
+
     return metrics
-
-
-@mpStarMap(5)
-def compute_hasqi(spath, epath, HL):
-    # TODO
-    sdata, fs1 = audioread(spath)
-    edata, fs2 = audioread(epath)
-    edata = edata[:, 0] if edata.ndim > 1 else edata
-    sdata = sdata[: len(edata)]
 
 
 def compute_box(result: List) -> Dict:
@@ -228,7 +243,7 @@ def pack_metrics(result: List) -> Dict:
         for k, v in d.items():
             dic.setdefault(k, []).append(v)
 
-    return {k: np.array(v) for k, v in dic.items()}
+    return {k: np.array(v).round(4) for k, v in dic.items()}
 
 
 if __name__ == "__main__":
@@ -283,8 +298,11 @@ if __name__ == "__main__":
             result = []
             col_w = []
             for k, v in scores.items():
-                print(f"{ subd }, {k}, {len(v)}")
-                result.append([k, v.mean().round(3), v.std().round(3)])
+                # print(f"{ subd }, {k}, {len(v)}")
+                if k == "stoi":
+                    result.append([k, v.mean().round(4), v.std().round(4), len(v)])
+                else:
+                    result.append([k, v.mean().round(3), v.std().round(3), len(v)])
 
             col_w = [max(len(str(d)) for d in col) for col in zip(*result)]
             for ele in result:

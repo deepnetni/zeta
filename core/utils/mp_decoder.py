@@ -44,8 +44,9 @@ class mpStarMap(object):
     Input: multi-lists where each list represent a argument unit, e.g, `[a1, a2, ..], [b1, b2, ..]`.
     """
 
-    def __init__(self, num=None) -> None:
+    def __init__(self, num=None, leave=True) -> None:
         self.num = num
+        self.leave = leave
 
     def __call__(self, func):
         @wraps(func)  # return the name of `func` when calling object.__name__
@@ -60,6 +61,7 @@ class mpStarMap(object):
                 zip(*param),
                 n_cpus=self.num,
                 tqdm_kwargs=dict(ncols=80),
+                leave=self.leave,
                 **kwargs,
             )
 

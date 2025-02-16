@@ -218,7 +218,7 @@ class Trainer(EngineGAN):
             desc=f"v-{self.vtest_dset.dirname}",
         )
 
-        # generate_filter_params(240000)
+        generate_filter_params(240000)
         for mic, sph, hl, nlen in pbar:
             mic = mic.to(self.device)  # B,T,6
             sph = sph.to(self.device)  # b,c,t,f
