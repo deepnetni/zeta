@@ -28,7 +28,92 @@ FIG6:
        - "nearend.wav"
        - "target.wav"
 
+FIG6_github:
+  new: FIG6_v2
+  vtest:
+    dirname: '/home/deepni/datasets/dns_wdrc/github_testset/test_noisy'
+    clean_dirname: '/home/deepni/datasets/dns_wdrc/github_testset/test_clean_fig6'
+    pattern: "**/[!.]*.wav"
+    flist: "fig6_github.csv"
+    audiogram: "/home/deepni/datasets/dns_wdrc/github_testset/HL_Audiograms.txt"
+
+FIG6_noise92:
+  # SIG Challenge Script dataset
+  vtest:
+    dirname: '/home/deepni/datasets/dns_wdrc/test_noise92'
+    # dirname: '/home/deepnetni/trunk/dns_wdrc/dev_vad'
+    pattern: "**/[!.]*_nearend.wav"
+    flist: "fig6_noise92.csv"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+
+FIG6_musan:
+  vtest:
+    dirname: '/home/deepni/datasets/dns_wdrc/test_musan'
+    # dirname: '/home/deepnetni/trunk/dns_wdrc/dns_testset_noverb'
+    pattern: "**/[!.]*_nearend.wav"
+    flist: "fig6_musan.csv"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+
+FIG6chime:
+  # SIG Challenge Script dataset
+  train:
+    dirname: '/home/deepni/datasets/chime_wdrc/train'
+    flist: "fig6_sig_train_chime.csv"
+    pattern: '[!.]*_nearend.wav'
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+  valid:
+    dirname: '/home/deepni/datasets/chime_wdrc/dev'
+    pattern: "**/[!.]*_nearend.wav"
+    flist: "fig6_sig_dev_chime.csv"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+  vtest:
+    dirname: '/home/deepni/datasets/chime_wdrc/test'
+    pattern: "**/[!.]*_nearend.wav"
+    flist: "fig6_sig_dns_test_chime.csv"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+
+FIG6Comp:
+  # SIG Challenge Script dataset
+  train:
+    dirname: '/home/deepni/datasets/dns_wdrc/train_100'
+    # dirname: '/home/deepnetni/trunk/dns_wdrc/train_100'
+    flist: "fig6_sig_train_100.csv"
+    pattern: '[!.]*_nearend.wav'
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+    nlen: 5.0
+    min_len: 1.0
+    return_clean: True
+  valid:
+    dirname: '/home/deepni/datasets/dns_wdrc/dev_vad'
+    # dirname: '/home/deepnetni/trunk/dns_wdrc/dev_vad'
+    pattern: "**/[!.]*_nearend.wav"
+    flist: "fig6_sig_dev_vad.csv"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+  vtest:
+    dirname: '/home/deepni/datasets/dns_wdrc/dns_testset_noverb'
+    # dirname: '/home/deepnetni/trunk/dns_wdrc/dns_testset_noverb'
+    pattern: "**/[!.]*_nearend.wav"
+    flist: "fig6_sig_dns_test.csv"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+
 FIG6Vad:
+  new: "FIG6"
   # SIG Challenge Script dataset
   train:
     dirname: '/home/deepni/datasets/dns_wdrc/train_100'

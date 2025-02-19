@@ -4,9 +4,11 @@ from typing import Dict, Optional
 
 import yaml
 
-from core.utils.logger import cprint
-from core.utils.trunk import *
-from core.utils.trunk_v2 import *
+from .utils.logger import cprint
+
+# from .utils.register import tables
+from .utils.trunk import *
+from .utils.trunk_v2 import *
 
 
 def get_datasets(name: str, yaml_f: str = "datasets.yaml"):
@@ -20,13 +22,22 @@ def get_datasets(name: str, yaml_f: str = "datasets.yaml"):
         cfg = yaml.load(fp, Loader=yaml.FullLoader)
 
     # conf = cfg[name.split("_")[0]] if conf is None else conf
-    conf = cfg[name.split("_")[0]]
+    # conf = cfg[name.split("_")[0]]
+    conf = cfg[name]
     cprint.y(f"using {name} dataset")
 
     train, valid, vtest = None, None, None
-    if "FIG6" in name:
+    if name == "FIG6":
         train = FIG6Trunk(**conf["train"])
         valid = FIG6Trunk(**conf["valid"])
+        vtest = FIG6Trunk(**conf["vtest"])
+    # elif name == "FIG6Vad":
+    #     train = FIG6Trunk(**conf["train"])
+    #     valid = FIG6Trunk(**conf["valid"])
+    #     vtest = FIG6Trunk(**conf["vtest"])
+    elif name == "FIG6_noise92":
+        vtest = FIG6Trunk(**conf["vtest"])
+    elif name == "FIG6_musan":
         vtest = FIG6Trunk(**conf["vtest"])
     elif name == "chime3":  # MC
         train = CHiMe3(conf["train"]["path"], subdir="train", nlen=3.0, min_len=1.0)
@@ -127,7 +138,14 @@ def get_datasets(name: str, yaml_f: str = "datasets.yaml"):
             clean_dirname=conf["vtest"]["label_path"],
         )
     else:
-        raise NotImplementedError(name)
+        if (class_name := conf.get("new")) is not None:
+            trunk = tables.datasets.get(class_name)
+            assert trunk is not None
+            train = trunk(**conf["train"]) if conf.get("train") is not None else None
+            valid = trunk(**conf["valid"]) if conf.get("valid") is not None else None
+            vtest = trunk(**conf["vtest"]) if conf.get("vtest") is not None else None
+        else:
+            raise NotImplementedError(name)
 
     out = (train, valid, vtest)
     return out

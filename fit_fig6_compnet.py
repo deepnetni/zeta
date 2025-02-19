@@ -157,7 +157,8 @@ if __name__ == "__main__":
     assert model is not None
     net = model(**md_conf)
 
-    train_dset, valid_dset, vtest_dset = get_datasets("FIG6_SIG")
+    # train_dset, valid_dset, vtest_dset = get_datasets("FIG6_SIG")
+    train_dset, valid_dset, vtest_dset = get_datasets("FIG6Comp")
 
     if args.train:
         init = cfg["config"]

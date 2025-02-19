@@ -28,8 +28,12 @@ from utils.metrics import *
 from utils.mp_decoder import mpStarMap
 from utils.HAids.PyHASQI.HASQI_revised import HASQI_v2, HASQI_v2_for_unfixedLen
 
+from utils.logger import get_logger
+
 # import torchvision
 # torchvision.disable_beta_transforms_warning()
+
+log = get_logger(__file__, level="INFO")
 
 
 def parse():
@@ -39,8 +43,8 @@ def parse():
         formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument("--src", help="src file or directory", type=str, default=None)
-    parser.add_argument("--src_spec", help="src file or directory", type=str, default=None)
-    parser.add_argument("--same", help="", default=False)
+    # parser.add_argument("--src_spec", help="src file or directory", type=str, default=None)
+    # parser.add_argument("--same", help="", default=False)
     parser.add_argument("--pattern", help="noisy files", default=r"^(?!\.).*\.wav$")
 
     parser.add_argument("--out", help="dst file or directory", type=str)
@@ -56,7 +60,7 @@ def parse():
     parser.add_argument("--asr", help="csig, cbak, covl", action="store_true")
     parser.add_argument("--l3das", help="l3das", action="store_true")
     parser.add_argument("--hasqi", help="hasqi", action="store_true")
-    parser.add_argument("--metrics", help="compute multi-metrics", nargs="+")
+    parser.add_argument("--metrics", help="compute multi-metrics", nargs="+", default=[])
 
     # output
     parser.add_argument("--excel", help="excel name", default=None)
@@ -68,13 +72,13 @@ def parse():
     # the output folder contain multi-types
     args = parser.parse_args()
 
-    if args.src is not None:
-        args.src = os.path.abspath(args.src)
-    elif args.src_spec is not None:
-        args.src_spec = os.path.abspath(args.src_spec)
-        args.same = True
-    else:
-        raise RuntimeError(f"src or src_spec must configure one.")
+    # if args.src is not None:
+    args.src = os.path.abspath(args.src)
+    # elif args.src_spec is not None:
+    #     args.src_spec = os.path.abspath(args.src_spec)
+    # args.same = True
+    # else:
+    #     raise RuntimeError(f"src or src_spec must configure one.")
 
     args.out = os.path.abspath(args.out)
 
@@ -89,7 +93,7 @@ def save_excel(fname: str, data: dict):
     with pd.ExcelWriter(fname) as writer:
         for sheet_name, metrics in data.items():
             df = pd.DataFrame(metrics)
-            # df.to_excel(writer, sheet_name=m, index=False, header=None)
+            sheet_name = sheet_name.replace("/", "_")
             df.to_excel(writer, sheet_name=sheet_name, index=False)
 
 
@@ -147,9 +151,9 @@ def compute_score(spath, epath, args, **kwargs):
 
     metrics = {}
 
-    for ele in args.metrics:
-        if not hasattr(args, ele):
-            raise RuntimeWarning(f"{ele} metric not supported.")
+    if any(not hasattr(args, m) for m in args.metrics):
+        unsupported_metrics = [m for m in args.metrics if not hasattr(args, m)]
+        raise RuntimeWarning(f"{', '.join(unsupported_metrics)} metric(s) not supported.")
 
     if args.sisnr or "sisnr" in args.metrics:
         metrics["sisnr"] = compute_si_snr(sdata, edata)
@@ -158,19 +162,25 @@ def compute_score(spath, epath, args, **kwargs):
         metrics["snr"] = compute_snr(sdata, edata)
 
     if args.pesqw or "pesqw" in args.metrics:
-        metrics["pesqw"] = compute_pesq(sdata, edata, fs=args.fs, mode="wb")
-        # print(spath, epath, metrics)
+        try:
+            metrics["pesqw"] = compute_pesq(sdata, edata, fs=args.fs, mode="wb")
+        except Exception as e:
+            # "b'No utterances detected'"
+            log.warning(f"{e}, {spath, epath}")
 
     if args.pesqn or "pesqn" in args.metrics:
-        metrics["pesqn"] = compute_pesq(sdata, edata, fs=args.fs, mode="nb")
+        try:
+            metrics["pesqn"] = compute_pesq(sdata, edata, fs=args.fs, mode="nb")
+        except Exception as e:
+            log.warning(f"{e}, {spath, epath}")
 
     if args.stoi or "stoi" in args.metrics:
         metrics["stoi"] = compute_stoi(sdata, edata, fs=args.fs)
 
     if args.sdr or "sdr" in args.metrics:
-        edata = torch.from_numpy(edata)
-        sdata = torch.from_numpy(sdata)
-        sdr = SDR(preds=edata, target=sdata)
+        edata_th = torch.from_numpy(edata)
+        sdata_th = torch.from_numpy(sdata)
+        sdr = SDR(preds=edata_th, target=sdata_th)
         # sisdr = si_sdr(preds=edata, target=sdata)
         metrics["sdr"] = sdr.cpu().numpy()
 
@@ -179,7 +189,10 @@ def compute_score(spath, epath, args, **kwargs):
 
     if args.l3das or "l3das" in args.metrics:
         score, wer, stoi_sc = task1_metric(sdata, edata)
-        metrics.update({"l3das_score": score, "l3das_wer": wer * 100, "l3das_stoi": stoi_sc})
+        if wer is not None and stoi_sc is not None:
+            metrics.update({"l3das_score": score, "l3das_wer": wer * 100, "l3das_stoi": stoi_sc})
+        else:
+            log.warning(f"{spath},{epath}: wer {wer}, stoi {stoi_sc}")
 
     if args.hasqi or "hasqi" in args.metrics:
         dirp, fname = os.path.split(spath)
@@ -246,6 +259,15 @@ def pack_metrics(result: List) -> Dict:
     return {k: np.array(v).round(4) for k, v in dic.items()}
 
 
+def sort_key(key):
+    try:
+        ret = (0, float(key))
+    except ValueError:
+        ret = (1, key)
+
+    return ret
+
+
 if __name__ == "__main__":
     """
     python compute_metrics.py --out ../trained_mcse_spdns/pred_mcse_50/test --src ~/datasets/spatialReverbNoise/test --map target.wav mic.wav --pesq
@@ -275,31 +297,35 @@ if __name__ == "__main__":
                 continue
 
             enh_l = list(map(lambda f: os.path.join(root, f), files))
-            if args.same is False:
-                src_l = [f.replace(args.out, args.src) for f in enh_l]
-            else:
-                src_l = [f.replace(root, args.src_spec) for f in enh_l]
+            # if args.same is False:
+            src_l = [f.replace(args.out, args.src) for f in enh_l]
+            # else:
+            #     src_l = [f.replace(root, args.src_spec) for f in enh_l]
             subd = str(Path(root).relative_to(args.out))
-
-            # print("@", enh_l[0] if len(files) != 0 else [], src_l[0])
 
             if args.map is not None:
                 src_l = [f.replace(*args.map) for f in src_l]
 
+            log.info(f"@, {enh_l[0] if len(files) != 0 else []}, E->S, {src_l[0]}")
+
+            # print(root)
             score_l = compute_score(src_l, enh_l, args=args)
             score = pack_metrics(score_l)
             items[subd] = score  # {"subd":{"m1":np.array, "m2":np.ndarry, ...}, ...}
 
-        items = dict(sorted(items.items()))
+        # items = dict(sorted(items.items()))
+        sorted_keys = sorted(items.keys(), key=sort_key)
         save_excel(args.excel, items) if args.excel is not None and len(items) != 0 else None
 
-        for subd, scores in items.items():
+        # for subd, scores in items.items():
+        for subd in sorted_keys:
+            scores = items[subd]
             cprint.b(f"\n{subd} ---------\n")
             result = []
             col_w = []
             for k, v in scores.items():
                 # print(f"{ subd }, {k}, {len(v)}")
-                if k == "stoi":
+                if "stoi" in k:
                     result.append([k, v.mean().round(4), v.std().round(4), len(v)])
                 else:
                     result.append([k, v.mean().round(3), v.std().round(3), len(v)])

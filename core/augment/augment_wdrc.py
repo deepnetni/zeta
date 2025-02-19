@@ -4,6 +4,7 @@ import json
 # import multiprocessing as mp
 import os
 import shutil
+import sys
 
 # from itertools import repeat
 from typing import Dict
@@ -11,17 +12,17 @@ from typing import Dict
 import numpy as np
 import soundfile as sf
 
-# import yaml
-# from tqdm import tqdm
-
 from synthesizer.synthesizer_wdrc import Synthesizer
 from utils.mp_decoder import mpMap
 
+# import yaml
+# from tqdm import tqdm
+
 
 @mpMap(10)
-def work(filenum: int, yaml, outdir, fs):
+def work(filenum: int, yaml, outdir, fs, snr=None):
     generator = Synthesizer(yaml)
-    audio = generator.generate()
+    audio = generator.generate(snr)
 
     meta: Dict
     meta = audio["info"]
@@ -60,8 +61,17 @@ def parser():
         default="./template/synthesizer_config_wdrc.yaml",
     )
     parser.add_argument("--outdir", help="out dirname")
+    parser.add_argument("--snr", help="output snr", type=float, nargs="+")
 
     return parser.parse_args()
+
+
+def refresh_dir(dirp):
+    if not os.path.exists(dirp):
+        os.makedirs(dirp)
+    else:
+        shutil.rmtree(dirp)
+        os.makedirs(dirp)
 
 
 if __name__ == "__main__":
@@ -79,11 +89,12 @@ if __name__ == "__main__":
     nlen = worker.cfg["onlinesynth_duration"]
     nfile = int(args.time * 3600 // (nlen))
 
-    if not os.path.exists(args.outdir):
-        os.makedirs(args.outdir)
+    if args.snr is not None:
+        for s in args.snr:
+            dirp = os.path.join(args.outdir, str(s))
+            refresh_dir(dirp)
     else:
-        shutil.rmtree(args.outdir)
-        os.makedirs(args.outdir)
+        refresh_dir(args.outdir)
 
     out = {}
     # mp.freeze_support()
@@ -100,6 +111,14 @@ if __name__ == "__main__":
     #     )
     # )
 
-    out["aug"] = work(range(nfile), args.yaml, args.outdir, fs)
-    num = np.array(out["aug"])
-    print(f"Generating {num.sum() * nlen / 3600:.2f} hours.")
+    if args.snr is not None:
+        for s in args.snr:
+            outdir = os.path.join(args.outdir, str(s))
+
+            out[f"{s}"] = work(range(nfile), args.yaml, outdir, fs, s)
+            num = np.array(out[str(s)])
+            print(f"SNR {s} Generating {num.sum() * nlen / 3600:.2f} hours.")
+    else:
+        out["aug"] = work(range(nfile), args.yaml, args.outdir, fs)
+        num = np.array(out["aug"])
+        print(f"Generating {num.sum() * nlen / 3600:.2f} hours.")

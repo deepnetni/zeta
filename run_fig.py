@@ -5,17 +5,26 @@ from itertools import product
 
 
 cmd = f"python fit_fig6_mgan.py --pred"
-item = ["--valid", "--vtest"]
+item = [
+    "--valid",
+    "--vtest",
+    "--dset FIG6_noise92",
+    # "--dset FIG6_github",
+]
+
 md_name = [
-    "baseline_fig6",
-    "baseline_fig6_linear",
-    "baseline_fig6_vad",
-    "condConformer",
-    "condConformerVAD",
-    "FTCRN",
-    "FTCRN_BASE_VAD",
-    "FTCRN_LINEAR",
-    "FTCRN_COND",
+    # "baseline_fig6",
+    # "baseline_fig6_linear",
+    # "baseline_fig6_vad --vad",
+    # "condConformer",
+    "IterCondConformer",
+    # "condConformerVAD --vad",
+    # "FTCRN",
+    # "FTCRN_BASE_VAD --vad",
+    # "FTCRN_LINEAR",
+    # "FTCRN_COND",
+    # "FTCRN_VAD --vad",
+    # "FTCRN_COND_Iter",
 ]
 
 

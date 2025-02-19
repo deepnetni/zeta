@@ -3,11 +3,15 @@ import numpy as np
 
 # lst = [{"a": 123}, {"a": 456}, {"b": 789}]
 
-# dic = {}
+dic = {}
 # for _ in lst:
 #     for k, v in _.items():
 #         dic.setdefault(k, []).append(v)
 
+dic.update({"a": 1, "b": 2})
+print(dic, "@")
+dic.update({"a": None, "b": 2})
+print(dic, "@")
 # print([{k: v} for k, v in dic.items()])
 
 # a = {"c": 2, "d": 3}

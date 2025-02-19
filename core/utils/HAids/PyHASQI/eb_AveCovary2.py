@@ -22,7 +22,7 @@ def eb_AveCovary2(sigcov, sigMSx, thr):
     nseg = len(index)
 
     if nseg <= 1:
-        print("Function eb_AveCovary: Ave signal below threshold, outputs set to 0.\n")
+        # print("Function eb_AveCovary: Ave signal below threshold, outputs set to 0.\n")
         avecov = 0
         syncov = np.zeros(6)
         return avecov, syncov
@@ -69,7 +69,7 @@ def eb_AveCovary2(sigcov, sigMSx, thr):
     if wsum < 1:
         avecov = 0
         syncov = fsum / ssum
-        print("Function eb_AveCovary: Signal tiles below threshold, outputs set to 0.\n")
+        # print("Function eb_AveCovary: Signal tiles below threshold, outputs set to 0.\n")
     else:
         avecov = csum / wsum
         syncov = fsum / ssum

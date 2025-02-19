@@ -1,4 +1,5 @@
 import torch
+from einops import rearrange
 from einops.layers.torch import Rearrange
 from torch import Tensor, nn
 
@@ -312,6 +313,136 @@ class DPRNN_Block_Conditional(nn.Module):
         return output
 
 
+class DPRNN_Block_Conditional_Iter(nn.Module):
+    def __init__(self, numUnits: int, width: int, ff_mult=4):
+        super().__init__()
+        self.numUnits = numUnits
+
+        self.width = width
+
+        self.intra_rnn = nn.LSTM(
+            input_size=self.numUnits,
+            hidden_size=self.numUnits // 2,
+            num_layers=1,
+            batch_first=True,
+            bidirectional=True,
+        )
+        self.intra_fc = nn.Linear(self.numUnits, self.numUnits)
+        self.intra_ln = nn.LayerNorm(normalized_shape=[self.width, self.numUnits])
+
+        self.inter_rnn = nn.LSTM(
+            input_size=self.numUnits, hidden_size=self.numUnits, num_layers=1, batch_first=True
+        )
+        self.inter_fc = nn.Linear(self.numUnits, self.numUnits)
+        self.inter_ln = nn.LayerNorm(normalized_shape=[self.width, self.numUnits])
+
+        dim = numUnits
+        self.adaLN_modulation_f = nn.Sequential(nn.SiLU(), nn.Linear(dim, 6 * dim, bias=True))
+        self.norm1_f = nn.LayerNorm(dim, elementwise_affine=False, eps=1e-6)
+        self.norm2_f = nn.LayerNorm(dim, elementwise_affine=False, eps=1e-6)
+        self.mlp_f = nn.Sequential(
+            nn.Linear(dim, dim * ff_mult),
+            nn.GELU(approximate="tanh"),
+            nn.Linear(dim * ff_mult, dim),
+        )
+
+        self.adaLN_modulation = nn.Sequential(nn.SiLU(), nn.Linear(dim, 6 * dim, bias=True))
+        self.norm1 = nn.LayerNorm(dim, elementwise_affine=False, eps=1e-6)
+        self.norm2 = nn.LayerNorm(dim, elementwise_affine=False, eps=1e-6)
+        self.mlp = nn.Sequential(
+            nn.Linear(dim, dim * ff_mult),
+            nn.GELU(approximate="tanh"),
+            nn.Linear(dim * ff_mult, dim),
+        )
+        self.mlp_cond = nn.Sequential(
+            nn.Linear(dim, dim * ff_mult),
+            nn.GELU(approximate="tanh"),
+            nn.Linear(dim * ff_mult, dim),
+        )
+
+    @staticmethod
+    def modulate(x, shift, scale):
+        """
+
+        :param x: b,t,c
+        :param shift: b,c
+        :param scale: b,c
+        :returns:
+
+        """
+        return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+
+    @staticmethod
+    def modulate_f(x, shift, scale):
+        return x * (1 + scale) + shift
+
+    def forward(self, input: Tensor, c: Tensor) -> Tensor:
+        # input shape: [B, C, T, F]
+        nB = input.size(0)
+        nT = input.size(-2)
+
+        # Intra-Chunk Processing
+        (
+            shift_msa_f,
+            scale_msa_f,
+            gate_msa_f,
+            shift_mlp_f,
+            scale_mlp_f,
+            gate_mlp_f,
+        ) = self.adaLN_modulation_f(c).chunk(6, dim=-1)
+
+        shift_msa_f = shift_msa_f.repeat_interleave(nT, dim=0)  # bt,f,c
+        scale_msa_f = scale_msa_f.repeat_interleave(nT, dim=0)
+        gate_msa_f = gate_msa_f.repeat_interleave(nT, dim=0)
+        shift_mlp_f = shift_mlp_f.repeat_interleave(nT, dim=0)
+        scale_mlp_f = scale_mlp_f.repeat_interleave(nT, dim=0)
+        gate_mlp_f = gate_mlp_f.repeat_interleave(nT, dim=0)
+
+        intra_RNN_input = input.permute(0, 2, 3, 1)  ## [B, T, F, C]
+        # BT,F,C
+        intra_RNN_input_rs = intra_RNN_input.reshape(
+            -1, intra_RNN_input.size(2), intra_RNN_input.size(3)
+        )
+        x_ = self.modulate_f(self.norm1_f(intra_RNN_input_rs), shift_msa_f, scale_msa_f)
+        intra_RNN_output, _ = self.intra_rnn(x_)
+        intra_dense_out = self.intra_fc(intra_RNN_output)
+        intra_dense_out = intra_dense_out * gate_msa_f + intra_RNN_input_rs
+        intra_ln_input = intra_dense_out.reshape(
+            nB, nT, intra_RNN_input.size(2), intra_RNN_input.size(3)
+        )
+        intra_ln_out = self.intra_ln(intra_ln_input)
+        intra_out = intra_ln_out.permute(0, 3, 1, 2)  # B,C,T,F
+        # intra_out = intra_out + input
+
+        # Inter-Chunk Processing
+        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(
+            c.view(-1, c.size(-1)).contiguous()
+        ).chunk(6, dim=1)
+
+        inter_RNN_input = intra_out.permute(0, 3, 2, 1)  ## [B, F, T, C]
+        # BF,T,C
+        inter_RNN_input_rs = inter_RNN_input.reshape(
+            -1, inter_RNN_input.size(2), inter_RNN_input.size(3)
+        )
+        x_ = self.modulate(self.norm1(inter_RNN_input_rs), shift_msa, scale_msa)
+        inter_RNN_output, _ = self.inter_rnn(x_)
+        inter_dense_out = self.inter_fc(inter_RNN_output)
+        inter_dense_out = inter_dense_out * gate_msa.unsqueeze(1) + inter_RNN_input_rs
+        x_ = gate_mlp.unsqueeze(1) * self.mlp(
+            self.modulate(self.norm2(inter_dense_out), shift_mlp, scale_mlp)
+        )
+        inter_dense_out = inter_dense_out + x_
+        inter_ln_input = inter_dense_out.reshape(
+            nB, inter_RNN_input.size(1), nT, inter_RNN_input.size(3)
+        )
+        inter_ln_input = inter_ln_input.permute(0, 2, 1, 3)
+        inter_ln_out = self.inter_ln(inter_ln_input)
+        output = inter_ln_out.permute(0, 3, 1, 2)
+        # output = inter_out + intra_out
+
+        return output, self.mlp_cond(c)
+
+
 @tables.register("models", "FTCRN")
 class MGAN_G(nn.Module):
     """
@@ -415,6 +546,157 @@ class MGAN_G(nn.Module):
         # spec: [B, 2, T, Fc]
 
         spec = self.stft.transform(inp)  # b,2,t,f
+        ht = expand_HT(ht, spec.shape[-2], self.reso)
+
+        cat_input = torch.cat([spec, ht], dim=1)
+        conv_out1 = self.conv1(cat_input)
+        conv_out2 = self.conv2(conv_out1)
+        conv_out3 = self.conv3(conv_out2)
+        conv_out4 = self.conv4(conv_out3)
+        conv_out5 = self.conv5(conv_out4)
+
+        DPRNN_out1 = self.DPRNN_1(conv_out5)
+        DPRNN_out2 = self.DPRNN_2(DPRNN_out1)
+
+        convT1_input = torch.cat((conv_out5, DPRNN_out2), 1)
+        convT1_out = self.convT1(convT1_input)
+
+        convT2_input = torch.cat((conv_out4, convT1_out[:, :, :, :-2]), 1)
+        convT2_out = self.convT2(convT2_input)
+
+        convT3_input = torch.cat((conv_out3, convT2_out[:, :, :, :-2]), 1)
+        convT3_out = self.convT3(convT3_input)
+
+        convT4_input = torch.cat((conv_out2, convT3_out[:, :, :, :-2]), 1)
+        convT4_out = self.convT4(convT4_input)
+
+        convT5_input = torch.cat((conv_out1, convT4_out[:, :, :, :-1]), 1)
+        convT5_out = self.convT5(convT5_input)
+
+        mask_out = convT5_out[:, :, :, :-2]
+
+        mask_real = mask_out[:, 0, :, :]
+        mask_imag = mask_out[:, 1, :, :]
+
+        noisy_real = spec[:, 0, :, :]
+        noisy_imag = spec[:, 1, :, :]
+
+        ####### simple complex reconstruct
+
+        # B,T,F
+        enh_real = noisy_real * mask_real - noisy_imag * mask_imag
+        enh_imag = noisy_real * mask_imag + noisy_imag * mask_real
+
+        spec_out = torch.stack([enh_real, enh_imag], dim=1)
+        out = self.stft.inverse(spec_out)
+        return out
+
+
+@tables.register("models", "FTCRN_MC")
+class MGAN_G(nn.Module):
+    """
+    Cheng, J., Liang, R., Zhao, L., Huang, C. and Schuller, B.W., 2023. Speech denoising and compensation for hearing aids using an FTCRN-based metric GAN. IEEE Signal Processing Letters, 30, pp.374-378.
+    """
+
+    def __init__(self, nframe=512, nhop=256):
+        super().__init__()
+
+        self.stft = STFT(nframe, nhop, nframe)
+        self.nbin = nframe // 2 + 1
+        self.reso = 16000 / nframe
+        assert self.reso < 250 and 250 % self.reso == 0
+
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=13, out_channels=32, kernel_size=(1, 5), stride=(1, 2), padding=(0, 1)
+            ),
+            nn.BatchNorm2d(32),
+            nn.PReLU(),
+        )
+
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=32, out_channels=32, kernel_size=(1, 3), stride=(1, 2), padding=(0, 1)
+            ),
+            nn.BatchNorm2d(32),
+            nn.PReLU(),
+        )
+
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=32, out_channels=32, kernel_size=(1, 3), stride=(1, 1), padding=(0, 1)
+            ),
+            nn.BatchNorm2d(32),
+            nn.PReLU(),
+        )
+
+        self.conv4 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=32, out_channels=64, kernel_size=(1, 3), stride=(1, 1), padding=(0, 1)
+            ),
+            nn.BatchNorm2d(64),
+            nn.PReLU(),
+        )
+
+        self.conv5 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=64, out_channels=128, kernel_size=(1, 3), stride=(1, 1), padding=(0, 1)
+            ),
+            nn.BatchNorm2d(128),
+            nn.PReLU(),
+        )
+
+        self.DPRNN_1 = DPRNN_Block(numUnits=128, width=64)
+        self.DPRNN_2 = DPRNN_Block(numUnits=128, width=64)
+
+        self.convT1 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels=256, out_channels=64, kernel_size=(1, 3), stride=(1, 1), padding=(0, 0)
+            ),
+            nn.BatchNorm2d(64),
+            nn.PReLU(),
+        )
+
+        self.convT2 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels=128, out_channels=32, kernel_size=(1, 3), stride=(1, 1), padding=(0, 0)
+            ),
+            nn.BatchNorm2d(32),
+            nn.PReLU(),
+        )
+
+        self.convT3 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels=64, out_channels=32, kernel_size=(1, 3), stride=(1, 1), padding=(0, 0)
+            ),
+            nn.BatchNorm2d(32),
+            nn.PReLU(),
+        )
+
+        self.convT4 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels=64, out_channels=32, kernel_size=(1, 3), stride=(1, 2), padding=(0, 0)
+            ),
+            nn.BatchNorm2d(32),
+            nn.PReLU(),
+        )
+
+        self.convT5 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels=64, out_channels=2, kernel_size=(1, 5), stride=(1, 2), padding=(0, 0)
+            ),
+        )
+
+    def forward(self, inp, ht):
+        """
+        inp: B,T
+        ht: B, 6
+        """
+        # spec: [B, 2, T, Fc]
+        nB = inp.size(0)
+        inp = rearrange(inp, "b t c-> (b c) t")
+        spec = self.stft.transform(inp)  # b,2,t,f
+        spec = rearrange(spec, "(b m) c t f->b (c m) t f", b=nB)
         ht = expand_HT(ht, spec.shape[-2], self.reso)
 
         cat_input = torch.cat([spec, ht], dim=1)
@@ -924,6 +1206,171 @@ class MGAN_G_COND(nn.Module):
 
         DPRNN_out1 = self.DPRNN_1(conv_out5, hl)
         DPRNN_out2 = self.DPRNN_2(DPRNN_out1, hl)
+
+        convT1_input = torch.cat((conv_out5, DPRNN_out2), 1)
+        convT1_out = self.convT1(convT1_input)
+
+        convT2_input = torch.cat((conv_out4, convT1_out[:, :, :, :-2]), 1)
+        convT2_out = self.convT2(convT2_input)
+
+        convT3_input = torch.cat((conv_out3, convT2_out[:, :, :, :-2]), 1)
+        convT3_out = self.convT3(convT3_input)
+
+        convT4_input = torch.cat((conv_out2, convT3_out[:, :, :, :-2]), 1)
+        convT4_out = self.convT4(convT4_input)
+
+        convT5_input = torch.cat((conv_out1, convT4_out[:, :, :, :-1]), 1)
+        convT5_out = self.convT5(convT5_input)
+
+        mask_out = convT5_out[:, :, :, :-2]
+
+        mask_real = mask_out[:, 0, :, :]
+        mask_imag = mask_out[:, 1, :, :]
+
+        noisy_real = spec[:, 0, :, :]
+        noisy_imag = spec[:, 1, :, :]
+
+        ####### simple complex reconstruct
+
+        # B,T,F
+        enh_real = noisy_real * mask_real - noisy_imag * mask_imag
+        enh_imag = noisy_real * mask_imag + noisy_imag * mask_real
+
+        spec_out = torch.stack([enh_real, enh_imag], dim=1)
+        out = self.stft.inverse(spec_out)
+        return out
+
+
+@tables.register("models", "FTCRN_COND_Iter")
+class MGAN_G_COND_ITER(nn.Module):
+    """
+    Cheng, J., Liang, R., Zhao, L., Huang, C. and Schuller, B.W., 2023. Speech denoising and compensation for hearing aids using an FTCRN-based metric GAN. IEEE Signal Processing Letters, 30, pp.374-378.
+    """
+
+    def __init__(self, nframe=512, nhop=256):
+        super().__init__()
+
+        self.stft = STFT(nframe, nhop, nframe)
+        self.nbin = nframe // 2 + 1
+        self.reso = 16000 / nframe
+        assert self.reso < 250 and 250 % self.reso == 0
+
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=2, out_channels=32, kernel_size=(1, 5), stride=(1, 2), padding=(0, 1)
+            ),
+            nn.BatchNorm2d(32),
+            nn.PReLU(),
+        )
+
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=32, out_channels=32, kernel_size=(1, 3), stride=(1, 2), padding=(0, 1)
+            ),
+            nn.BatchNorm2d(32),
+            nn.PReLU(),
+        )
+
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=32, out_channels=32, kernel_size=(1, 3), stride=(1, 1), padding=(0, 1)
+            ),
+            nn.BatchNorm2d(32),
+            nn.PReLU(),
+        )
+
+        self.conv4 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=32, out_channels=64, kernel_size=(1, 3), stride=(1, 1), padding=(0, 1)
+            ),
+            nn.BatchNorm2d(64),
+            nn.PReLU(),
+        )
+
+        self.conv5 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=64, out_channels=128, kernel_size=(1, 3), stride=(1, 1), padding=(0, 1)
+            ),
+            nn.BatchNorm2d(128),
+            nn.PReLU(),
+        )
+
+        self.DPRNN_1 = DPRNN_Block_Conditional_Iter(numUnits=128, width=64)
+        self.DPRNN_2 = DPRNN_Block_Conditional_Iter(numUnits=128, width=64)
+
+        self.convT1 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels=256, out_channels=64, kernel_size=(1, 3), stride=(1, 1), padding=(0, 0)
+            ),
+            nn.BatchNorm2d(64),
+            nn.PReLU(),
+        )
+
+        self.convT2 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels=128, out_channels=32, kernel_size=(1, 3), stride=(1, 1), padding=(0, 0)
+            ),
+            nn.BatchNorm2d(32),
+            nn.PReLU(),
+        )
+
+        self.convT3 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels=64, out_channels=32, kernel_size=(1, 3), stride=(1, 1), padding=(0, 0)
+            ),
+            nn.BatchNorm2d(32),
+            nn.PReLU(),
+        )
+
+        self.convT4 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels=64, out_channels=32, kernel_size=(1, 3), stride=(1, 2), padding=(0, 0)
+            ),
+            nn.BatchNorm2d(32),
+            nn.PReLU(),
+        )
+
+        self.convT5 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels=64, out_channels=2, kernel_size=(1, 5), stride=(1, 2), padding=(0, 0)
+            ),
+        )
+        self.mlp = nn.Sequential(
+            nn.Linear(self.nbin, self.nbin * 4),
+            Rearrange("b c t (f n)-> b (c n) t f", n=4),
+            nn.GELU(approximate="tanh"),
+            nn.Conv2d(4, 16, (1, 5), (1, 2), (0, 1)),
+            nn.BatchNorm2d(16),
+            nn.PReLU(),
+            nn.Conv2d(16, 64, (1, 3), (1, 2), (0, 1)),
+            nn.BatchNorm2d(64),
+            nn.PReLU(),
+            Rearrange("b c t f-> b f t c"),
+            nn.Linear(64, 128),
+        )
+
+    def forward(self, inp, ht):
+        """
+        inp: B,T
+        ht: B, 6
+        """
+        # spec: [B, 2, T, Fc]
+
+        spec = self.stft.transform(inp)  # b,2,t,f
+        ht = expand_HT_norepeat(ht, spec.shape[-2], self.reso)
+
+        hl = self.mlp(ht)  # b,1,1,f
+        hl = hl.squeeze(2)
+
+        # cat_input = torch.cat([spec, ht], dim=1)
+        conv_out1 = self.conv1(spec)
+        conv_out2 = self.conv2(conv_out1)
+        conv_out3 = self.conv3(conv_out2)
+        conv_out4 = self.conv4(conv_out3)
+        conv_out5 = self.conv5(conv_out4)
+
+        DPRNN_out1, cond = self.DPRNN_1(conv_out5, hl)
+        DPRNN_out2, cond = self.DPRNN_2(DPRNN_out1, cond)
 
         convT1_input = torch.cat((conv_out5, DPRNN_out2), 1)
         convT1_out = self.convT1(convT1_input)

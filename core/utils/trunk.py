@@ -23,7 +23,8 @@ from torch.nn.utils.rnn import pad_packed_sequence, pad_sequence, pack_padded_se
 from utils.audiolib import audioread
 from utils.gcc_phat import gcc_phat
 from utils.logger import get_logger
-from models.conv_stft import STFT
+
+# from models.conv_stft import STFT
 from tqdm import tqdm
 from utils.register import tables
 

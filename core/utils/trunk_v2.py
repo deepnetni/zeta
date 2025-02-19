@@ -283,15 +283,17 @@ class TrunkBasic(Dataset):
         """
         element = []
         for f_mic in mic_list:
-            _, f_mic_name = os.path.split(f_mic)
+            dirp, f_mic_name = os.path.split(f_mic)
             f_sph = f_mic_name.replace(*self.keymap) if self.keymap is not None else f_mic_name
-            f_sph = os.path.join(self.clean_dir, f_sph)
+            f_sph = os.path.join(dirp, f_sph)
+            f_sph = f_sph.replace(str(self.dir), str(self.clean_dir))
 
             dmic, _ = audioread(f_mic)
             element.append(((f_mic, f_sph), len(dmic)))
         return element
 
 
+@tables.register("datasets", "FIG6")
 class FIG6Trunk(TrunkBasic):
     def __init__(
         self,
@@ -322,17 +324,21 @@ class FIG6Trunk(TrunkBasic):
         )
 
         self.load_vad = kwargs.get("vad", False)
+        self.return_clean = kwargs.get("return_clean", False)
+
+    def get_audiogram(self, f_mic):
+        hl_f = re.sub(r"(\w*)_nearend.wav", r"\1.json", f_mic)
+        with open(hl_f, "r") as fp:
+            ctx = json.load(fp)
+            hl = ast.literal_eval(ctx["HL"])
+        return hl
 
     def __getitem__(self, index) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         el = self.f_list[index]
         f_mic, f_sph = el["f"]
         st, ed, pd = el["start"], el["end"], el["pad"]
 
-        hl_f = re.sub(r"(\w*)_nearend.wav", r"\1.json", f_mic)
-        with open(hl_f, "r") as fp:
-            ctx = json.load(fp)
-            hl = ast.literal_eval(ctx["HL"])
-
+        hl = self.get_audiogram(f_mic)
         d_mic, fs_1 = audioread(f_mic, sub_mean=True)
         d_sph, fs_2 = audioread(f_sph)  # T,2
         # d_sph, fs_2 = sf.read(f_sph)  # T,2
@@ -348,11 +354,21 @@ class FIG6Trunk(TrunkBasic):
             # d_sph = np.stack([d_sph, d_vad], axis=-1)  # T,2
             d_sph = d_sph[..., 0]
 
-        return (
-            torch.from_numpy(d_mic).float(),
-            torch.from_numpy(d_sph).float(),
-            torch.tensor(hl).float(),
-        )
+        if self.return_clean is True:
+            f_sph_raw = re.sub(r"(\w*)_nearend.wav", r"\1_transform.wav", f_mic)
+            d_sph_raw, _ = audioread(f_sph_raw, sub_mean=True)
+            return (
+                torch.from_numpy(d_mic).float(),
+                torch.from_numpy(d_sph).float(),
+                torch.from_numpy(d_sph_raw).float(),
+                torch.tensor(hl).float(),
+            )
+        else:
+            return (
+                torch.from_numpy(d_mic).float(),
+                torch.from_numpy(d_sph).float(),
+                torch.tensor(hl).float(),
+            )
 
     def __next__(self) -> Tuple[torch.Tensor, torch.Tensor, str]:
         """used for predict api
@@ -363,10 +379,7 @@ class FIG6Trunk(TrunkBasic):
             el = self.f_list[self.pick_idx]
             f_mic, f_sph = el["f"]
             # st, ed, pd = el["start"], el["end"], el["pad"]
-            hl_f = re.sub(r"(\w*)_nearend.wav", r"\1.json", f_mic)
-            with open(hl_f, "r") as fp:
-                ctx = json.load(fp)
-                hl = ast.literal_eval(ctx["HL"])
+            hl = self.get_audiogram(f_mic)
 
             d_mic, _ = audioread(f_mic, sub_mean=True)
             fname = str(Path(f_sph).relative_to(self.clean_dir.parent))
@@ -380,6 +393,52 @@ class FIG6Trunk(TrunkBasic):
             )
         else:
             raise StopIteration
+
+
+@tables.register("datasets", "FIG6_v2")
+class FIG6TrunkV2(FIG6Trunk):
+    def __init__(
+        self,
+        dirname: str,
+        pattern: str = "**/*.wav",
+        clean_dirname: Optional[str] = None,
+        flist: Optional[str] = None,
+        nlen: float = 0,
+        min_len: float = 0,
+        fs: int = 16000,
+        seed: Optional[int] = None,
+        csv_dir: str = __file__.rsplit("/", 3)[0] + "/manifest",
+        keymap: Optional[Tuple[str, ...]] = None,
+        **kwargs,
+    ):
+        super().__init__(
+            dirname,
+            pattern,
+            clean_dirname,
+            flist,
+            nlen,
+            min_len,
+            fs,
+            seed,
+            csv_dir,
+            keymap,
+            **kwargs,
+        )
+        hl_f = kwargs.get("audiogram")
+        assert hl_f is not None
+        self.hl_dict = {}
+        with open(hl_f, "r") as fp:
+            # hl = ast.literal_eval(ctx["HL"])
+            for line in fp:
+                parts = line.strip().split(",")  # list
+                file_id = parts[0]
+                self.hl_dict[file_id] = list(map(float, parts[1:]))
+
+    def get_audiogram(self, f_mic):
+        _, fname = os.path.split(f_mic)
+        file_id = fname.split(".")[0]
+        hl = self.hl_dict[file_id]
+        return hl
 
 
 if __name__ == "__main__":

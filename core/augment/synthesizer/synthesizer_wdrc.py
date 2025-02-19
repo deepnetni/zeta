@@ -128,7 +128,14 @@ class DatasetDict:
             if dataset_name in datasets:
                 raise ValueError(f"Duplicate dataset '{dataset_name}'")
 
-            files = list(glob.glob(os.path.join(data_config["dir"], "**/*.wav"), recursive=True))
+            if "Libri" in dataset_name:
+                files = list(
+                    glob.glob(os.path.join(data_config["dir"], "**/*.flac"), recursive=True)
+                )
+            else:
+                files = list(
+                    glob.glob(os.path.join(data_config["dir"], "**/*.wav"), recursive=True)
+                )
             if len(files) > 0:
                 datasets[dataset_name] = files
                 weights[dataset_name] = data_config["weight"]
@@ -255,7 +262,7 @@ class Synthesizer:
 
         return mix, noise, norm_scalar
 
-    def _generate_nearend(self):
+    def _generate_nearend(self, snr=None):
         dur_nearend = self.cfg["onlinesynth_duration"] * self.cfg["onlinesynth_sampling_rate"]
 
         if dur_nearend > 0:
@@ -307,8 +314,9 @@ class Synthesizer:
                     gaussian_noise = std * np.random.randn(len(x_noise))
                     x_noise += gaussian_noise.astype(np.float32)
 
-            snr_interval = self.cfg["onlinesynth_nearend_snr_interval"]
-            snr = random.uniform(min(snr_interval), max(snr_interval))
+            if snr is None:
+                snr_interval = self.cfg["onlinesynth_nearend_snr_interval"]
+                snr = random.uniform(min(snr_interval), max(snr_interval))
 
             x_nearend, x_noise, norm_scalar = self._mix_signals(
                 x_nearend, x_noise, snr, rms_clean=rms(x_transform), rms_noise=rms(x_noise)
@@ -320,14 +328,6 @@ class Synthesizer:
         HL = self.audiogram[np.random.choice(self.audiogram.shape[0])]
         info.update({"HL": np.array2string(HL, separator=",")})
 
-        # x_target = FIG6_compensation(
-        #     HL,
-        #     x_transform,
-        #     self.fig6_cfg["sample_rate"],
-        #     self.fig6_cfg["nframe"],
-        #     self.fig6_cfg["nhop"],
-        # )
-        # x_target_vad = np.where(x_vad > 0.5, x_target, x_transform)
         x_target_vad = FIG6_compensation_vad(
             HL,
             x_transform,
@@ -349,6 +349,7 @@ class Synthesizer:
             {
                 "input_RMS": rms(x_transform, True).round(2),
                 "output_RMS:": rms(x_target_vad, True).round(2),
+                "SNR": np.round(snr, 2),
             }
         )
         if x_noise is None:
@@ -412,12 +413,12 @@ class Synthesizer:
         data["mic"] = x_mic
         return data
 
-    def generate(self) -> Dict:
+    def generate(self, snr=None) -> Dict:
         """
         Returns a dict with target (desired signal), nearend (target signal affected by noise and some gain changes)
         and mic (nearend signal affected by various distortions).
         """
-        data = self._generate_nearend()
+        data = self._generate_nearend(snr=snr)
         # data = self._generate_mic(data)
 
         return data

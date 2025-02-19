@@ -1,3 +1,4 @@
+import ast
 import logging
 import os
 import sys
@@ -34,11 +35,20 @@ class CPrint(object):
         print("\033[37m" + ctx + "\033[0m", **kwargs)
 
 
+level_mapping = {
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
+    "CRITICAL": logging.CRITICAL,
+}
+
+
 def get_logger(
     name,
     mode="console",
     dirname=None,
-    level=logging.INFO,
+    level="INFO",
     fmt_msg="%(asctime)s [%(module)s:%(lineno)d - %(levelname)s] %(message)s",
     fmt_date="%Y-%m-%d %H:%M:%S",
 ) -> logging.Logger:
@@ -49,6 +59,7 @@ def get_logger(
             - `file`, the message will be written to the `name` file under `dirname` directory; otherwise, sent to the console;
             - `console`, default.
         - level: message that level under `level` parameter will be ignored.
+            DEBUG, INFO, WARNING, ERROR, CRITICAL
 
     Examples:
         1. writer to console
@@ -63,6 +74,8 @@ def get_logger(
 
     logger = logging.getLogger(name)
     if not logger.handlers:
+        if isinstance(level, str):
+            level = level_mapping[level]
         logger.setLevel(level)
         fmt = logging.Formatter(fmt=fmt_msg, datefmt=fmt_date)
 

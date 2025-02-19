@@ -1,5 +1,7 @@
 import numpy as np
 import math
+
+
 def eb_melcor(x, y, thr, addnoise):
     nbands = x.shape[0]
     nbasis = 6
@@ -24,7 +26,7 @@ def eb_melcor(x, y, thr, addnoise):
     if nsamp <= 1:
         m1 = 0
         xy = np.zeros(nbasis)
-        print("Function eb_melcor: Signal below threshold, outputs set to 0")
+        # print("Function eb_melcor: Signal below threshold, outputs set to 0")
         return m1, xy, vad
 
     x = x[:, index]
@@ -57,6 +59,3 @@ def eb_melcor(x, y, thr, addnoise):
     m1 = np.sum(xy[1:]) / (nbasis - 1)
 
     return m1, xy, vad
-
-
-

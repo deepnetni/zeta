@@ -348,7 +348,7 @@ def FIG6_compensation(HL, inp, fs=16000, nframe=128, nhop=64):
     return x.squeeze()
 
 
-def FIG6_compensation_vad(HL, inp, fs=16000, nframe=128, nhop=64, vad=None):
+def FIG6_compensation_vad(HL, inp, fs=16000, nframe=128, nhop=64, vad=None, ret_vad=False):
     if vad is None:
         vad_detect = VAD(10, fs, level=2)
         vad_detect.reset()
@@ -358,8 +358,14 @@ def FIG6_compensation_vad(HL, inp, fs=16000, nframe=128, nhop=64, vad=None):
     else:
         x_vad = vad
     comp = FIG6_compensation(HL, inp, fs, nframe, nhop)
+    inp = inp[: len(comp)]
+    x_vad = x_vad[: len(comp)]
     comp = np.where(x_vad > 0.5, comp, inp)
-    return comp
+
+    if ret_vad:
+        return comp, x_vad
+    else:
+        return comp
 
 
 if __name__ == "__main__":

@@ -31,10 +31,10 @@ onlinesynth_nearend_noises:
     dir: '/home/deepni/disk/DNS-Challenge/datasets/noise'
     # dir: '/home/deepnetni/disk/DNS-Challenge/datasets/noise'
   noise_92:
-    weight: 1.0
+    weight: 0.0
     dir: '/home/deepni/disk/noise_92'
   musan:
-    weight: 0.0
+    weight: 1.0
     dir: '/home/deepni/disk/musan/noise'
   noise_wind:
     weight: 0.0

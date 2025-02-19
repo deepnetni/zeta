@@ -32,6 +32,8 @@ from utils.record import REC
 from utils.stft_loss import MultiResolutionSTFTLoss
 from utils.trunk_v2 import FIG6Trunk
 
+import torch.profiler
+
 
 def pad_to_longest(batch):
     """
@@ -65,6 +67,8 @@ class Trainer(EngineGAN):
 
         # self.net_ae = net_ae.to(self.device)
         # self.net_ae.eval()
+
+        self.hasqi_filter_len = [119808, 119808, 240000]
 
         self.train_loader = DataLoader(
             train_dset,
@@ -152,7 +156,7 @@ class Trainer(EngineGAN):
         if isinstance(HL, torch.Tensor):
             HL = HL.cpu().detach().numpy()
 
-        with Parallel(n_jobs=8) as parallel:
+        with Parallel(n_jobs=24) as parallel:
             hasqi_score = parallel(
                 delayed(HASQI_v2)(o, self.fs, e, self.fs, ht) for o, e, ht in zip(sph, est, HL)
             )
@@ -488,6 +492,12 @@ class Trainer(EngineGAN):
 
     def _fit_discriminator_step(self, *inputs, sph, one_labels):
         enh, HL = inputs
+        # sph = sph[:, : enh.size(-1)]
+        # inp = torch.concat([sph, sph], dim=0)
+        # lbl = torch.concat([sph, enh.detach()], dim=0)
+        # hl = torch.concat([HL, HL], dim=0)
+        # out = self.net_D(inp, lbl, hl)
+        # max_metric, pred_metric = out.chunk(2, dim=0)
         max_metric = self.net_D(sph, sph, HL)
         pred_metric = self.net_D(sph, enh.detach(), HL)
 
@@ -525,8 +535,8 @@ class Trainer(EngineGAN):
     def _fit_each_epoch(self, epoch):
         losses_rec = REC()
 
-        if hasattr(self.net, "setup_num"):
-            self.net.setup_num(epoch)
+        # if hasattr(self.net, "setup_num"):
+        #     self.net.setup_num(epoch)
 
         pbar = tqdm(
             self.train_loader,
@@ -535,7 +545,8 @@ class Trainer(EngineGAN):
             desc=f"Epoch-{epoch}/{self.epochs}",
         )
 
-        generate_filter_params(119808)
+        generate_filter_params(self.hasqi_filter_len[0])
+        # with torch.profiler.profile() as prof:
         for mic, sph, HL in pbar:
             mic = mic.to(self.device)  # B,T
             sph = sph.to(self.device)  # B,T
@@ -569,6 +580,8 @@ class Trainer(EngineGAN):
             losses_rec.update({"loss_D": loss_D.detach()})
             pbar.set_postfix(**losses_rec.state_dict())
 
+        # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+
         return losses_rec.state_dict()
 
     def _valid_each_epoch(self, epoch):
@@ -583,7 +596,7 @@ class Trainer(EngineGAN):
 
         draw = False
 
-        generate_filter_params(119808)
+        generate_filter_params(self.hasqi_filter_len[1])
         for mic, sph, HL, nlen in pbar:
             mic = mic.to(self.device)  # B,T,6
             sph = sph.to(self.device)  # b,c,t,f
@@ -628,7 +641,7 @@ class Trainer(EngineGAN):
         # vtest_outdir = os.path.join(self.vtest_outdir, dirname)
         # shutil.rmtree(vtest_outdir) if os.path.exists(vtest_outdir) else None
 
-        generate_filter_params(240000)
+        generate_filter_params(self.hasqi_filter_len[2])
         for mic, sph, HL, nlen in pbar:
             mic = mic.to(self.device)  # B,T,6
             sph = sph.to(self.device)  # b,c,t,f
@@ -707,6 +720,86 @@ class Trainer(EngineGAN):
         #         verbose=False,
         #     )
         return flops
+
+
+class TrainerforBaselines(Trainer):
+    def __init__(
+        self,
+        train_dset: Dataset,
+        valid_dset: Dataset,
+        vtest_dset: Dataset,
+        train_batch_sz: int,
+        vpred_dset: Optional[Dataset] = None,
+        **kwargs,
+    ):
+        super().__init__(train_dset, valid_dset, vtest_dset, train_batch_sz, vpred_dset, **kwargs)
+
+    def _fit_generator_step(self, *inputs, sph):
+        """each training step in epoch, revised it if model has different output formats.
+
+        :param sph:
+        :param one_labels:
+        :returns:
+
+        """
+        mic, HL = inputs
+        enh = self.net(mic, HL)  # B,T
+        sph = sph[..., : enh.size(-1)]
+        # loss_dict = self.loss_fn_apc_denoise(sph, enh)
+        # loss_dict = self.loss_fn(sph, enh)
+        assert callable(self.net.loss)
+        loss_dict = self.net.loss(sph, enh)
+        loss = loss_dict["loss"]
+
+        return loss, loss_dict
+
+    def _fit_each_epoch(self, epoch):
+        losses_rec = REC()
+
+        pbar = tqdm(
+            self.train_loader,
+            # ncols=160,
+            leave=True,
+            desc=f"Epoch-{epoch}/{self.epochs}",
+        )
+
+        generate_filter_params(self.hasqi_filter_len[0])
+        # with torch.profiler.profile() as prof:
+        for mic, sph, HL in pbar:
+            mic = mic.to(self.device)  # B,T
+            sph = sph.to(self.device)  # B,T
+            HL = HL.to(self.device)  # B,6
+
+            ###################
+            # Train Generator #
+            ###################
+            self.optimizer.zero_grad()
+
+            loss, loss_dict = self._fit_generator_step(mic, HL, sph=sph)
+
+            loss.backward()
+            # torch.nn.utils.clip_grad_norm_(self.net.parameters(), 3, 2)
+            self.optimizer.step()
+            losses_rec.update(loss_dict)
+            pbar.set_postfix(**losses_rec.state_dict())
+        # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+
+        return losses_rec.state_dict()
+
+    def _valid_step(self, *inps, sph, nlen) -> Tuple[Tensor, Dict]:
+        mic, HL = inps
+        with torch.no_grad():
+            enh = self.net(mic, HL)  # B,T,M
+
+        metric_dict = self.valid_fn(sph, enh, nlen, return_loss=False)
+        hasqi_score = self.batch_hasqi_score(sph, enh, HL)
+        if hasqi_score is not None:
+            hasqi_score = hasqi_score.mean()
+        else:
+            hasqi_score = torch.tensor(0.0)
+        metric_dict.update({"HASQI": hasqi_score})
+
+        return enh, metric_dict
 
 
 class TrainerMultiOutputs(Trainer):
@@ -990,7 +1083,7 @@ class TrainerCompNetGAN(Trainer):
 
         return enh
 
-    def loss_fn(self, sph, enh, model_output):
+    def loss_fn_(self, sph, cln, model_output):
         sph_xk = torch.stft(
             sph,
             512,
@@ -1003,26 +1096,31 @@ class TrainerCompNetGAN(Trainer):
         sph_spec = torch.stack([sph_xk.real, sph_xk.imag], dim=1).permute(0, 1, 3, 2)  # B,2,T,F
 
         esti_wav, esti_mag, post_x = model_output
-        sisnr_lv = loss_sisnr(sph, esti_wav)
+        # sisnr_lv = loss_sisnr(cln, esti_wav)
+        # sc_loss, mag_loss = self.ms_stft_loss(esti_wav, cln)
+        # stft_lv = sc_loss + mag_loss  # + 0.3 * pmsqe_score  # + 0.25 * pase_loss
+
         mag_lv = self.mag_loss_fn(esti_mag, sph_mag)
         com_mag_lv = self.com_mag_loss_fn(post_x, sph_spec)
 
-        loss = 0.05 * sisnr_lv + 0.5 * com_mag_lv + mag_lv
+        loss = com_mag_lv + mag_lv
 
         loss_dict = {
             "loss": loss,
-            "sisnr": 0.05 * sisnr_lv.detach(),
+            # "stft_lv": stft_lv.detach(),
             "mag_lv": mag_lv.detach(),
-            "com_mag_lv": 0.5 * com_mag_lv.detach(),
+            "com_mag_lv": com_mag_lv.detach(),
         }
 
         return loss_dict
 
-    def _fit_generator_step(self, *inputs, sph, one_labels):
+    def _fit_generator_step(self, *inputs, sph, cln, one_labels):
         mic, HL = inputs
         model_output, enh = self.net(mic, HL)  # B,T
         sph = sph[..., : enh.size(-1)]
-        loss_dict = self.loss_fn(sph, enh, model_output)
+        cln = cln[..., : enh.size(-1)]
+        # loss_dict = self.loss_fn_(sph, cln, model_output)
+        loss_dict = self.loss_fn(sph, enh)
 
         fake_metric = self.net_D(sph, enh, HL)
         loss_GAN = F.mse_loss(fake_metric.flatten(), one_labels)
@@ -1086,9 +1184,10 @@ class TrainerCompNetGAN(Trainer):
 
         generate_filter_params(119808)
         skip_count = 0
-        for mic, sph, HL in pbar:
+        for mic, sph, cln, HL in pbar:
             mic = mic.to(self.device)  # B,T
             sph = sph.to(self.device)  # B,T
+            cln = cln.to(self.device)  # B,T
             HL = HL.to(self.device)  # B,6
             one_labels = torch.ones(mic.shape[0]).float().cuda()  # B,
 
@@ -1097,10 +1196,12 @@ class TrainerCompNetGAN(Trainer):
             ###################
             self.optimizer.zero_grad()
 
-            enh, loss, loss_dict = self._fit_generator_step(mic, HL, sph=sph, one_labels=one_labels)
+            enh, loss, loss_dict = self._fit_generator_step(
+                mic, HL, sph=sph, cln=cln, one_labels=one_labels
+            )
 
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.net.parameters(), 5.0)
+            # torch.nn.utils.clip_grad_norm_(self.net.parameters(), 5.0)
             has_nan_inf = 0
             for params in self.net.parameters():
                 if params.requires_grad:
@@ -1133,3 +1234,168 @@ class TrainerCompNetGAN(Trainer):
             pbar.set_postfix(**show_state)
 
         return losses_rec.state_dict()
+
+
+class TrainerMC(Trainer):
+    def __init__(
+        self,
+        train_dset: Dataset,
+        valid_dset: Dataset,
+        vtest_dset: Dataset,
+        train_batch_sz: int,
+        vpred_dset: Optional[Dataset] = None,
+        **kwargs,
+    ):
+        super().__init__(train_dset, valid_dset, vtest_dset, train_batch_sz, vpred_dset, **kwargs)
+        self.hasqi_filter_len = [71808, 71808, 71808]
+
+    def _valid_dsets(self):
+        dset_dict = {}
+        # -----------------------#
+        ##### valid dataset  #####
+        # -----------------------#
+        metric_rec = REC()
+        pbar = tqdm(
+            self.valid_loader,
+            # ncols=300,
+            leave=False,
+            desc=f"v-{self.valid_dset.dirname}",
+        )
+
+        generate_filter_params(71808)
+        for mic, sph, hl, nlen in pbar:
+            # print(mic.shape, sph.shape, hl.shape, nlen.shape)
+            mic = mic.to(self.device)  # B,T; mic data
+            mic = mic.mean(dim=-1)
+            sph = sph.to(self.device)  # B,T; clean + compensation
+            nlen = self.stft.nLen(nlen).to(self.device)  # B,
+
+            x_noisy_fig6_l = []
+            for i in range(mic.shape[0]):
+                mic_ = mic[i].cpu().numpy()
+                hl_ = hl[i].cpu().numpy()
+                x_noisy_fig6 = FIG6_compensation_vad(hl_, mic_, self.fs, 128, 64)
+                x_noisy_fig6_l.append(x_noisy_fig6)
+
+            x_noisy_fig6 = np.stack(x_noisy_fig6_l, axis=0)
+            x_noisy_fig6 = x_noisy_fig6[:, : nlen[0]]
+            sph = sph[:, : nlen[0]]
+            hasqi_score = self.batch_hasqi_score(sph, x_noisy_fig6, hl)
+            if hasqi_score is not None:
+                hasqi_score = hasqi_score.mean()
+            else:
+                hasqi_score = torch.tensor(0.0)
+
+            metric_dict = self.valid_fn(sph, mic, nlen, return_loss=False)
+            metric_dict.pop("score")
+            # record the loss
+            metric_rec.update({**metric_dict, "HASQI": hasqi_score})
+            pbar.set_postfix(**metric_rec.state_dict())
+
+        dset_dict["valid"] = metric_rec.state_dict()
+
+        # -----------------------#
+        ##### vtest dataset ######
+        # -----------------------#
+        metric_rec = REC()
+        pbar = tqdm(
+            self.vtest_loader,
+            # ncols=300,
+            leave=False,
+            desc=f"v-{self.vtest_dset.dirname}",
+        )
+
+        # generate_filter_params(240000)
+        for mic, sph, hl, nlen in pbar:
+            mic = mic.to(self.device)  # B,T,6
+            mic = mic.mean(dim=-1)
+            sph = sph.to(self.device)  # b,c,t,f
+            nlen = self.stft.nLen(nlen).to(self.device)  # B,
+
+            x_noisy_fig6_l = []
+            for i in range(mic.shape[0]):
+                mic_ = mic[i].cpu().numpy()
+                hl_ = hl[i].cpu().numpy()
+                x_noisy_fig6 = FIG6_compensation_vad(hl_, mic_, self.fs, 128, 64)
+                x_noisy_fig6_l.append(x_noisy_fig6)
+
+            x_noisy_fig6 = np.stack(x_noisy_fig6_l, axis=0)
+            x_noisy_fig6 = x_noisy_fig6[:, : nlen[0]]
+            sph = sph[:, : nlen[0]]
+            hasqi_score = self.batch_hasqi_score(sph, x_noisy_fig6, hl)
+            if hasqi_score is not None:
+                hasqi_score = hasqi_score.mean()
+            else:
+                hasqi_score = torch.tensor(0.0)
+
+            metric_dict = self.valid_fn(sph, mic, nlen, return_loss=False)
+            metric_dict.pop("score")
+            metric_dict.update(
+                eval_composite(sph.cpu().numpy(), mic.cpu().numpy(), sample_rate=16000)
+            )
+
+            # record the loss
+            metric_rec.update({**metric_dict, "HASQI": hasqi_score})
+            pbar.set_postfix(**metric_rec.state_dict())
+
+        dset_dict["vtest"] = metric_rec.state_dict()
+        print(dset_dict)
+
+        return dset_dict
+
+    def _net_flops(self) -> int:
+        import copy
+
+        # from thop import profile
+
+        x = torch.randn(1, 16000, 6)
+        hl = torch.randn(1, 6)
+
+        flops, params = check_flops(copy.deepcopy(self.net).cpu(), x, hl)
+        # with warnings.catch_warnings():
+        #     warnings.filterwarnings("ignore", message="This API is being deprecated")
+        #     flops, _ = profile(
+        #         copy.deepcopy(self.net).cpu(),
+        #         inputs=(x, hl),
+        #         verbose=False,
+        #     )
+        return flops
+
+    def prediction_per_epoch(self, epoch):
+        return
+        outdir = super().prediction_per_epoch(epoch)
+
+        idx = 0
+        for mic, HL, fname in self.vpred_dset:
+            if idx >= 20:
+                break
+
+            mic = mic.to(self.device)  # B,T,6
+            HL = HL.to(self.device)  # B,6
+
+            enh = self._predict_step(mic, HL)
+            # with torch.no_grad():
+            #     enh = self.net(mic, HL)
+
+            N = enh.shape[-1]
+            audiowrite(
+                f"{outdir}/{fname}",
+                np.concatenate(
+                    [
+                        mic.squeeze().cpu().numpy()[:N],
+                        enh.squeeze().cpu().numpy()[:, None],
+                    ],
+                    axis=-1,
+                ),
+                self.fs,
+            )
+            idx += 1
+
+    def _config_scheduler(self, name: str, optimizer: Optimizer):
+        supported = {
+            "stepLR": lambda p: lr_scheduler.StepLR(p, step_size=30, gamma=0.5),
+            "reduceLR": lambda p: lr_scheduler.ReduceLROnPlateau(
+                p, mode="min", factor=0.5, patience=1
+            ),
+        }
+        return supported[name](optimizer)

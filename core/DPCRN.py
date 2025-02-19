@@ -1,8 +1,11 @@
 import torch
 import torch.nn as nn
-from torch import Tensor
-from models.AE import AE
 from einops.layers.torch import Rearrange
+from torch import Tensor
+
+from models.AE import AE
+from models.conv_stft import STFT
+from utils.register import tables
 
 
 class DPRNN_Block(nn.Module):
@@ -89,24 +92,12 @@ class DPRNN_Block(nn.Module):
         return output
 
 
-class AE_BLK(nn.Module):
-    def __init__(self, ckpt: str):
-        super().__init__()
-        self.layer = AE(in_features=257, latent_dim=64)
-        self.layer.load_state_dict(torch.load(ckpt))
-        self.layer.requires_grad_(False)
-
-    def forward(self, x):
-        z: torch.Tensor
-        z = self.layer.encode(x)
-        return z.unsqueeze(1)  # b,c,t,f
-
-
+@tables.register("models", "DPCRN")
 class DPCRN_Model_new(nn.Module):
-    def __init__(self, use_ae: bool = False):
+    def __init__(self, nframe=512, nhop=256):
         super().__init__()
 
-        # self.input_ln = nn.LayerNorm(normalized_shape=[201, 2])
+        self.stft = STFT(nframe, nhop, nframe)
 
         self.conv1 = nn.Sequential(
             nn.Conv2d(
@@ -166,35 +157,6 @@ class DPCRN_Model_new(nn.Module):
             nn.BatchNorm2d(128),
             nn.LeakyReLU(negative_slope=0.3),
         )
-
-        self.use_ae = use_ae
-        if use_ae:
-            # self.ae_encoder = AE_BLK(r"D:\pcharm\AE\checkpoints\best.pth")
-            self.ae_encoder = AE_BLK("/home/deepni/tfb/AE_SNR/checkpoints/best.pth")
-            # self.ae_conv = nn.Sequential(
-            #     nn.Conv2d(
-            #         in_channels=1, out_channels=128, kernel_size=1, stride=1, padding=0
-            #     ),
-            #     nn.BatchNorm2d(128),
-            #     nn.LeakyReLU(negative_slope=0.3),
-            # )
-            self.ae_conv = nn.Sequential(
-                nn.Linear(in_features=64, out_features=64 * 128),
-                Rearrange("b 1 t (c f)-> b c t f", c=128),
-                nn.Conv2d(in_channels=128, out_channels=128, kernel_size=1, stride=1),
-                nn.BatchNorm2d(128),
-            )
-            self.ae_post_conv = nn.Sequential(
-                nn.Conv2d(
-                    in_channels=256,
-                    out_channels=128,
-                    kernel_size=1,
-                    stride=1,
-                    padding=0,
-                ),
-                nn.BatchNorm2d(128),
-                nn.LeakyReLU(negative_slope=0.3),
-            )
 
         self.DPRNN_1 = DPRNN_Block(numUnits=128, width=60)
         self.DPRNN_2 = DPRNN_Block(numUnits=128, width=60)
@@ -257,31 +219,17 @@ class DPCRN_Model_new(nn.Module):
             ),
         )
 
-    def forward(self, spec: Tensor) -> [Tensor, Tensor]:
-        # spec: [B, 2, T, Fc]
-        b, c, t, f = spec.shape
-
-        # input_ln_in = spec.permute(0, 2, 3, 1)
-        #
-        # input_ln_out = self.input_ln(input_ln_in)
-        #
-        # conv_input = input_ln_out.permute(0, 3, 1, 2)
+    def forward(self, inp: Tensor):
+        """
+        inp: B,T
+        """
+        spec = self.stft.transform(inp)
 
         conv_out1 = self.conv1(spec)
-
         conv_out2 = self.conv2(conv_out1)
-
         conv_out3 = self.conv3(conv_out2)
-
         conv_out4 = self.conv4(conv_out3)
-
         conv_out5 = self.conv5(conv_out4)
-
-        if self.use_ae:
-            z = self.ae_encoder(spec)
-            # conv_out5 = conv_out5 * self.ae_conv(z)
-            conv_out = torch.cat([conv_out5, self.ae_conv(z)], dim=1)
-            conv_out5 = self.ae_post_conv(conv_out)
 
         DPRNN_out1 = self.DPRNN_1(conv_out5)
         DPRNN_out2 = self.DPRNN_2(DPRNN_out1)
