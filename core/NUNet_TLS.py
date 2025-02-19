@@ -874,12 +874,13 @@ class NUNet_TLS(nn.Module):
         return out_wav
 
     def loss(self, target, enhanced):
-        mag_target, _ = self.stft(target)
-        mag_enh, _ = self.stft(enhanced)
+        # mag_target, _ = self.stft(target)
+        # mag_enh, _ = self.stft(enhanced)
         l1 = F.mse_loss(enhanced, target, reduction="mean")
-        l2 = nn.L1Loss()(mag_enh, mag_target)
-        l = (l1 + l2) * 0.5
-        return dict(loss=l, mse_lv=l1, mae_lv=l2)
+        # l2 = nn.L1Loss()(mag_enh, mag_target)
+        # l = (l1 + l2) * 0.5
+        # return dict(loss=l, mse_lv=l1, mae_lv=l2)
+        return dict(loss=l1)
 
 
 if __name__ == "__main__":

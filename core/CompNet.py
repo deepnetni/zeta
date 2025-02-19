@@ -1671,7 +1671,8 @@ class CollaborativePostProcessingFIG6(nn.Module):
             stcns_gain.append(TCMList(kd1, cd1, d_feat, norm_type, dilations, is_causal))
             stcns_resi.append(TCMList(kd1, cd1, d_feat, norm_type, dilations, is_causal))
         self.stcns_gain, self.stcns_resi = nn.ModuleList(stcns_gain), nn.ModuleList(stcns_resi)
-        self.gain_out_conv = nn.Sequential(nn.Conv1d(d_feat, freq_dim, kernel_size=1), nn.Sigmoid())
+        # self.gain_out_conv = nn.Sequential(nn.Conv1d(d_feat, freq_dim, kernel_size=1), nn.Sigmoid())
+        self.gain_out_conv = nn.Sequential(nn.Conv1d(d_feat, freq_dim, kernel_size=1), nn.PReLU())
         self.resi_out_conv = nn.Conv1d(d_feat, freq_dim * 2, kernel_size=1)
         #
         self.real_rnn = nn.GRU(

@@ -1,14 +1,106 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import concurrent.futures
 import math
+
+import torch
+import torch as th
+import torch.nn as nn
+import torch.nn.functional as F
+
 from utils.check_flops import check_flops
 
 
-class ConvBlockModule(nn.Module):
+def seg_and_add(wav: th.Tensor, frame_len: int = 320, hop_size: int = 160) -> th.Tensor:
+    """
+    wav: [length]
+    return: [1, F, L]
+    """
+    if len(wav.shape) == 2:
+        wav = wav.squeeze(0)
+    assert len(wav.shape) <= 2
+    segs = []
+    length = wav.shape[0]
+    nF = int(math.floor((length - frame_len) / (frame_len - hop_size) + 1) + 1)
+    offset = 0
+    for i in range(nF):
+        seg = wav[offset : offset + frame_len]
+        if seg.shape[0] < frame_len:
+            seg = F.pad(seg, (0, frame_len - seg.shape[0]))  # padding at the end
+        segs.append(seg.unsqueeze(0))
+        offset += hop_size
+
+    return th.stack(segs, dim=1)
+
+
+# ThreadExecutor.map() --> multithread processing while keeping the original order
+
+
+def seg_and_add_by_batch(wav: th.Tensor, frame_len: int = 320, hop_size: int = 160) -> th.Tensor:
+    """
+    inputs: [Batch, Length]
+    return: [Batch, 1,  F, frame_len]
+    """
+    if len(wav.shape) == 1:
+        wav = wav.unsqueeze(0)
+    assert len(wav.shape) <= 2
+    B, _ = wav.shape
+    wav = th.chunk(wav, chunks=B, dim=0)
+    ret = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+        for segs in executor.map(seg_and_add, wav):
+            ret.append(segs)
+    ret = th.stack(ret, dim=0)
+    return ret
+
+
+def restore_to_wav(segs: th.Tensor, frame_len: int = 320, hop_size: int = 160) -> th.Tensor:
+    """
+    segs: [F, L]
+    return: [length]
+    """
+    if len(segs.shape) == 3:
+        segs = segs.squeeze(0)
+    assert len(segs.shape) == 2
+
+    F, L = segs.shape
+    wav = segs[0, ...]
+    offset = frame_len - hop_size
+    for i in range(1, F):
+        wav = th.cat((wav, segs[i, offset:]))
+    return wav
+
+
+def restore_to_wav_by_batch(
+    segs: th.Tensor, frame_len: int = 320, hop_size: int = 160
+) -> th.Tensor:
+    """
+    inputs: [Batch, F, frame_len]
+    return: [Batch, Length]
+    """
+    if len(segs.shape) == 4:
+        segs = segs.squeeze(1)
+    assert len(segs.shape) == 3
+    B, _, _ = segs.shape
+    segs = th.chunk(segs, chunks=B, dim=0)
+    ret = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+        for wav in executor.map(restore_to_wav, segs):
+            ret.append(wav)
+    ret = th.stack(ret, dim=0)
+    return ret
+
+
+if __name__ == "__main__":
+    wav = th.rand([4, 16000 * 4])
+    out = seg_and_add_by_batch(wav)
+    restored = restore_to_wav_by_batch(out)[..., : 16000 * 4]
+    idx = wav == restored
+    print(idx)
+    print(th.equal(wav, restored))
+
+
+class ConvBLK(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, padding, dilation):
-        super(ConvBlockModule, self).__init__()
+        super(ConvBLK, self).__init__()
         # self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, padding=padding, dilation=dilation)
         self.conv_dep = nn.Conv2d(
             in_channels, in_channels, kernel_size, padding=padding, dilation=dilation
@@ -32,15 +124,15 @@ class ConvBlockModule(nn.Module):
 
 
 class DilatedDenseBlock(nn.Module):
-    def __init__(self, in_channels, growtorch.rate, num_layers):
+    def __init__(self, in_channels, growth_rate, num_layers):
         super(DilatedDenseBlock, self).__init__()
         self.num_layers = num_layers
         self.layers = nn.ModuleList()
         for i in range(num_layers):
             self.layers.append(
-                ConvBlockModule(
-                    in_channels + i * growtorch.rate,
-                    growtorch.rate,
+                ConvBLK(
+                    in_channels + i * growth_rate,
+                    growth_rate,
                     kernel_size=3,
                     padding=2**i,
                     dilation=2**i,
@@ -54,89 +146,15 @@ class DilatedDenseBlock(nn.Module):
         return out
 
 
-def seg_and_add(wav: torch.Tensor, frame_len: int = 320, hop_size: int = 160) -> th.Tensor:
-    """
-    wav: [lengtorch.
-    return: [1, F, L]
-    """
-    if len(wav.shape) == 2:
-        wav = wav.squeeze(0)
-    assert len(wav.shape) <= 2
-    segs = []
-    lengtorch.= wav.shape[0]
-    nF = int(matorch.floor((length - frame_len) / (frame_len - hop_size) + 1) + 1)
-    offset = 0
-    for i in range(nF):
-        seg = wav[offset : offset + frame_len]
-        if seg.shape[0] < frame_len:
-            seg = F.pad(seg, (0, frame_len - seg.shape[0]))  # padding at torch. end
-        segs.append(seg.unsqueeze(0))
-        offset += hop_size
-
-    return torch.stack(segs, dim=1)
-
-
-# Torch.eadExecutor.map() --> multithread processing while keeping the original order
-
-
-def seg_and_add_by_batch(wav: torch.Tensor, frame_len: int = 320, hop_size: int = 160) -> th.Tensor:
-    """
-    inputs: [Batch, Lengtorch.
-    return: [Batch, 1,  F, frame_len]
-    """
-    if len(wav.shape) == 1:
-        wav = wav.unsqueeze(0)
-    assert len(wav.shape) <= 2
-    B, _ = wav.shape
-    wav = torch.chunk(wav, chunks=B, dim=0)
-    ret = []
-    witorch.concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
-        for segs in executor.map(seg_and_add, wav):
-            ret.append(segs)
-    ret = torch.stack(ret, dim=0)
-    return ret
-
-
-def restore_to_wav(segs: torch.Tensor, frame_len: int = 320, hop_size: int = 160) -> th.Tensor:
-    """
-    segs: [F, L]
-    return: [lengtorch.
-    """
-    if len(segs.shape) == 3:
-        segs = segs.squeeze(0)
-    assert len(segs.shape) == 2
-
-    F, L = segs.shape
-    wav = segs[0, ...]
-    offset = frame_len - hop_size
-    for i in range(1, F):
-        wav = torch.cat((wav, segs[i, offset:]))
-    return wav
-
-
-def restore_to_wav_by_batch(
-    segs: torch.Tensor, frame_len: int = 320, hop_size: int = 160
-) -> torch.Tensor:
-    """
-    inputs: [Batch, F, frame_len]
-    return: [Batch, Lengtorch.
-    """
-    if len(segs.shape) == 4:
-        segs = segs.squeeze(1)
-    assert len(segs.shape) == 3
-    B, _, _ = segs.shape
-    segs = torch.chunk(segs, chunks=B, dim=0)
-    ret = []
-    witorch.concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
-        for wav in executor.map(restore_to_wav, segs):
-            ret.append(wav)
-    ret = torch.stack(ret, dim=0)
-    return ret
+if __name__ == "__main__":
+    net = DilatedDenseBlock(64, 4, 3)
+    x = torch.rand([4, 64, 400, 79])
+    print(net(x).shape)
 
 
 class Transformer_SA(nn.Module):
     """
-    transformer witorch. self-attention
+    transformer with  self-attention
     """
 
     def __init__(self, embed_dim, hidden_size, num_heads, bidirectional=True):
@@ -152,8 +170,8 @@ class Transformer_SA(nn.Module):
 
     def forward(self, x):
         """
-        x: [lengtorch. batch, dimension]
-        return: [lengtorch. batch, dimension]
+        x: [length, batch, dimension]
+        return: [length, batch, dimension]
         """
         y = self.ln1(x)
         y, _ = self.mha(y, y, y)
@@ -170,7 +188,7 @@ class Transformer_SA(nn.Module):
 
 class Transformer_CA(nn.Module):
     """
-    transformer witorch. cross-attention
+    transformer with  cross-attention
     """
 
     def __init__(self, embed_dim, hidden_size, num_heads, bidirectional=True):
@@ -186,8 +204,8 @@ class Transformer_CA(nn.Module):
 
     def forward(self, x0, x1):
         """
-        x0, x1: [lengtorch. batch, dimension]
-        return: [lengtorch. batch, dimension]
+        x0, x1: [length, batch, dimension]
+        return: [length, batch, dimension]
         """
         y0 = self.ln1(x0)
         y1 = self.ln1(x1)
@@ -225,8 +243,8 @@ class CPTB(nn.Module):
         return: [batch, channels, num_frames, time_frames]
         """
         B, C, F, L = x.shape
-        local_feat = torch.reshape(x.permute(0, 2, 3, 1), (-1, L, C))
-        global_feat = torch.reshape(x.permute(0, 3, 2, 1), (-1, F, C))
+        local_feat = th.reshape(x.permute(0, 2, 3, 1), (-1, L, C))
+        global_feat = th.reshape(x.permute(0, 3, 2, 1), (-1, F, C))
 
         local_feat = self.local_transformer(local_feat)
         local_feat = self.local_norm(local_feat.transpose(-1, -2)).transpose(-1, -2)
@@ -237,7 +255,7 @@ class CPTB(nn.Module):
         fusion_feat = self.fusion_transformer(local_feat, global_feat)
         fusion_feat = self.fusion_norm(fusion_feat.transpose(-1, -2)).transpose(-1, -2)
 
-        fusion_feat = torch.reshape(fusion_feat, [B, C, F, L])
+        fusion_feat = th.reshape(fusion_feat, [B, C, F, L])
         return fusion_feat
 
 
@@ -406,11 +424,6 @@ class Decoder(nn.Module):
 
 
 class CPTNN(nn.Module):
-    """
-    CPTNN: CROSS-PARALLEL TRANSFORMER NEURAL NETWORK FOR TIME-DOMAIN SPEECH ENHANCEMENT
-    https://gitorch.b.com/Honee-W/CPTNN/blob/master/cptnn.py
-    """
-
     def __init__(
         self,
         frame_len=512,
@@ -437,12 +450,11 @@ class CPTNN(nn.Module):
 
     def forward(self, x):
         """
-        x: [batch, lengtorch.
-        return: [batch, lengtorch.
+        x: [batch, length]
+        return: [batch, length]
         """
         _, L = x.shape
         x = seg_and_add_by_batch(x, self.frame_len, self.hop_size)
-        print(x.shape)
         x, f = self.encoder(x)
         # f = random_mask_by_batch(f)
         y = self.cptm(f)
@@ -454,11 +466,20 @@ class CPTNN(nn.Module):
 
 
 if __name__ == "__main__":
-    inputs = torch.rand([1, 16000])
+    inputs = th.rand([4, 16000 * 4])
+    print(inputs.shape)
     net = CPTNN()
-    check_flops(net, inputs)
-    print("done")
-    # params = sum([param.nelement() for param in net.parameters()]) / 10.0**6
-    # print("params: {}M".format(params))
-    # outputs = net(inputs)
-    # print(outputs.shape)
+    params = sum([param.nelement() for param in net.parameters()]) / 10.0**6
+    print("params: {}M".format(params))
+    outputs = net(inputs)
+    print(outputs.shape)
+
+# if __name__ == "__main__":
+#     inputs = torch.rand([1, 16000])
+#     net = CPTNN()
+#     check_flops(net, inputs)
+#     print("done")
+# params = sum([param.nelement() for param in net.parameters()]) / 10.0**6
+# print("params: {}M".format(params))
+# outputs = net(inputs)
+# print(outputs.shape)
