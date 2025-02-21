@@ -444,6 +444,7 @@ class DPRNN_Block_Conditional_Iter(nn.Module):
 
 
 @tables.register("models", "FTCRN")
+@tables.register("models", "HAMGAN")
 class MGAN_G(nn.Module):
     """
     Cheng, J., Liang, R., Zhao, L., Huang, C. and Schuller, B.W., 2023. Speech denoising and compensation for hearing aids using an FTCRN-based metric GAN. IEEE Signal Processing Letters, 30, pp.374-378.
@@ -593,7 +594,7 @@ class MGAN_G(nn.Module):
 
 
 @tables.register("models", "FTCRN_MC")
-class MGAN_G(nn.Module):
+class MGAN_G_MC(nn.Module):
     """
     Cheng, J., Liang, R., Zhao, L., Huang, C. and Schuller, B.W., 2023. Speech denoising and compensation for hearing aids using an FTCRN-based metric GAN. IEEE Signal Processing Letters, 30, pp.374-378.
     """

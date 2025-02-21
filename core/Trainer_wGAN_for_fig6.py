@@ -3,7 +3,7 @@ import sys
 
 # sys.path.append(__file__.rsplit("/", 2)[0])  # up two /
 sys.path.append(__file__.rsplit("/", 1)[0])  # up two /
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, cast
 
 import numpy as np
 import torch
@@ -93,6 +93,7 @@ class Trainer(EngineGAN):
             collate_fn=pad_to_longest,
             # generator=g,
         )
+        valid_dset = cast(FIG6Trunk, valid_dset)
         self.valid_dset: FIG6Trunk = valid_dset
 
         self.vtest_loader = DataLoader(
@@ -125,19 +126,19 @@ class Trainer(EngineGAN):
         ).to(self.device)
         self.ms_stft_loss.eval()
 
-        # self.pase = wf_builder("core/config/frontend/PASE+.cfg")
-        # assert self.pase is not None
-        # self.pase.cuda()
-        # self.pase.eval()
-        # self.pase.load_pretrained("core/pretrained/pase_e199.ckpt", load_last=True, verbose=False)
+        self.pase = wf_builder("core/config/frontend/PASE+.cfg")
+        assert self.pase is not None
+        self.pase.cuda()
+        self.pase.eval()
+        self.pase.load_pretrained("core/pretrained/pase_e199.ckpt", load_last=True, verbose=False)
 
-        # self.APC_criterion = APC_SNR_multi_filter(
-        #     model_hop=128,
-        #     model_winlen=512,
-        #     mag_bins=256,
-        #     theta=0.01,
-        #     hops=[8, 16, 32, 64],
-        # ).to(self.device)
+        self.APC_criterion = APC_SNR_multi_filter(
+            model_hop=128,
+            model_winlen=512,
+            mag_bins=256,
+            theta=0.01,
+            hops=[8, 16, 32, 64],
+        ).to(self.device)
 
     def _config_scheduler(self, name: str, optimizer: Optimizer):
         supported = {
@@ -259,7 +260,7 @@ class Trainer(EngineGAN):
 
         return dset_dict
 
-    def loss_fn_apc_denoise_(self, clean: Tensor, enh: Tensor) -> Dict:
+    def loss_fn_apc_phase_denoise(self, clean: Tensor, enh: Tensor) -> Dict:
         """loss_fn_apc_denoise_wphase_loss
         clean: B,T
         """
@@ -313,6 +314,34 @@ class Trainer(EngineGAN):
             "loss": loss,
             "pmsqe": apc_pmsqe_loss.detach(),
             "apc_snr": 0.05 * APC_SNR_loss.detach(),
+            "pase": 0.25 * pase_loss.detach(),
+        }
+
+    def loss_fn_pase_denoise(self, clean: Tensor, enh: Tensor) -> Dict:
+        """
+        clean: B,T
+        """
+        # specs_enh = self.stft.transform(pred) # B,2,T,F
+        # specs_sph = self.stft.transform(clean)
+
+        # * pase loss
+        assert self.pase is not None
+        clean_pase = self.pase(clean.unsqueeze(1))  # B,1,T
+        clean_pase = clean_pase.flatten(0)
+        enh_pase = self.pase(enh.unsqueeze(1))
+        enh_pase = enh_pase.flatten(0)
+        pase_loss = F.mse_loss(clean_pase, enh_pase)
+
+        specs_enh = self.stft.transform(enh)  # B,2,T,F
+        specs_sph = self.stft.transform(clean)
+
+        # apc loss
+        # APC_SNR_loss, apc_pmsqe_loss = self.APC_criterion(enh + 1e-8, clean + 1e-8)
+        pmsqe_loss = loss_pmsqe(specs_sph, specs_enh)
+        loss = pmsqe_loss + 0.25 * pase_loss
+        return {
+            "loss": loss,
+            "pmsqe": pmsqe_loss.detach(),
             "pase": 0.25 * pase_loss.detach(),
         }
 
@@ -415,8 +444,9 @@ class Trainer(EngineGAN):
         """
 
         nB = sph.size(0)
-        # if nlen_list.unique().numel() == 1:
-        if True:
+        # `numel()` return the total number of elements in a Tensor
+        if nlen_list.unique().numel() == 1:
+            # if True:
             sph = sph[..., : nlen_list[0]]
             enh = enh[..., : nlen_list[0]]
             np_l_sph = sph.cpu().numpy()
@@ -438,8 +468,8 @@ class Trainer(EngineGAN):
 
                 sisnr_l.append(self._si_snr(sph_.cpu().numpy(), enh_.cpu().numpy()))
                 sdr_l.append(SDR(preds=enh_, target=sph_).cpu().numpy())
-                sisnr_sc = np.array(sisnr_l).mean()
-                sdr_sc = np.array(sdr_l).mean()
+            sisnr_sc = np.array(sisnr_l).mean()
+            sdr_sc = np.array(sdr_l).mean()
 
         # sisnr_sc_ = self._si_snr(sph, enh).mean()
         pesq_wb_sc = self._pesq(np_l_sph, np_l_enh, fs=16000).mean()
@@ -461,7 +491,8 @@ class Trainer(EngineGAN):
         }
 
         if return_loss:
-            loss_dict = self.loss_fn(sph[..., : enh.size(-1)], enh)
+            N = nlen_list.min()
+            loss_dict = self.loss_fn(sph[..., :N], enh[..., :N])
             # loss_dict = self.loss_fn_apc_denoise(sph, enh)
         else:
             loss_dict = {}
@@ -1060,6 +1091,41 @@ class TrainerGumbelCodebook(Trainer):
         )
 
         return enh, metric_dict
+
+
+class TrainerHAMGAN(Trainer):
+    def __init__(
+        self,
+        train_dset: Dataset,
+        valid_dset: Dataset,
+        vtest_dset: Dataset,
+        train_batch_sz: int,
+        vpred_dset: Optional[Dataset] = None,
+        **kwargs,
+    ):
+        super().__init__(train_dset, valid_dset, vtest_dset, train_batch_sz, vpred_dset, **kwargs)
+
+    def _fit_generator_step(self, *inputs, sph, one_labels):
+        """each training step in epoch, revised it if model has different output formats.
+
+        :param sph:
+        :param one_labels:
+        :returns:
+
+        """
+        mic, HL = inputs
+        enh = self.net(mic, HL)  # B,T
+        sph = sph[..., : enh.size(-1)]
+        # loss_dict = self.loss_fn_apc_denoise(sph, enh)
+        # loss_dict = self.loss_fn(sph, enh)
+        loss_dict = self.loss_fn_pase_denoise(sph, enh)
+
+        fake_metric = self.net_D(sph, enh, HL)
+        loss_GAN = F.mse_loss(fake_metric.flatten(), one_labels)
+        loss = loss_dict["loss"] + loss_GAN
+        loss_dict.update({"loss_G": loss_GAN.detach()})
+
+        return enh, loss, loss_dict
 
 
 class TrainerCompNetGAN(Trainer):

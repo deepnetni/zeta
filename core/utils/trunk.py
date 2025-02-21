@@ -1624,202 +1624,202 @@ class L3DAS22(Dataset):
             raise StopIteration
 
 
-@tables.register("datasets", "WHAMR_2CHSE")
-class WHAMR_2CH(Dataset):
-    """Dataset class
-    Args:
-        dirname: directory contains the (train, label) wav files.
-        patten: search patten to get noisy wav file;
-        raw_len: length of training file in seconds;
-        nlen: length of training file in seconds;
-        min_len: the minimal length of a valid training file.
-        csv_dir: dir to the default generated flist, default: `manifest`;
-        flist: the file list csv path;
-        clean_dirname: the path to the clean dir, target with the same name as mic files;
-        fs: the sample rate, default 16000;
-        keymap: replace patten to get corresponding clean wav file.
-                ["str in noisy", "corresponding str in clean"]
-        return_abspath: only used in `__next__` method, which return (data, fname), default False;
-        norm: the normalization value for audio data, default None, while SIG set to -27;
-        seed: random seed, to shuffle the flist if not None.
+# @tables.register("datasets", "WHAMR_2CHSE")
+# class WHAMR_2CH(Dataset):
+#     """Dataset class
+#     Args:
+#         dirname: directory contains the (train, label) wav files.
+#         patten: search patten to get noisy wav file;
+#         raw_len: length of training file in seconds;
+#         nlen: length of training file in seconds;
+#         min_len: the minimal length of a valid training file.
+#         csv_dir: dir to the default generated flist, default: `manifest`;
+#         flist: the file list csv path;
+#         clean_dirname: the path to the clean dir, target with the same name as mic files;
+#         fs: the sample rate, default 16000;
+#         keymap: replace patten to get corresponding clean wav file.
+#                 ["str in noisy", "corresponding str in clean"]
+#         return_abspath: only used in `__next__` method, which return (data, fname), default False;
+#         norm: the normalization value for audio data, default None, while SIG set to -27;
+#         seed: random seed, to shuffle the flist if not None.
 
-    Return:
-        1. call by torch.utils.data.DataLoader
-            (mic, sph) torch.tensor pair.
+#     Return:
+#         1. call by torch.utils.data.DataLoader
+#             (mic, sph) torch.tensor pair.
 
-        2. call by iterator, e.g.
-            ```
-            for data, fname in NSTrunk():
-                ...
-            ```
-            (data, fname)
-    """
+#         2. call by iterator, e.g.
+#             ```
+#             for data, fname in NSTrunk():
+#                 ...
+#             ```
+#             (data, fname)
+#     """
 
-    def __init__(
-        self,
-        dirname: str,
-        patten: str = "**/*_mic.wav",
-        keymap: Optional[Tuple[str, str]] = None,
-        flist: Optional[str] = None,
-        clean_dirname: Optional[str] = None,
-        fs: int = 16000,
-        raw_len: Optional[float] = None,
-        nlen: float = 0.0,
-        min_len: float = 0.0,  # padding 0 to `nlen`
-        csv_dir: str = "manifest",
-        seed: Optional[int] = None,
-        norm: Optional[int] = None,
-        return_abspath: bool = False,
-    ):
-        super().__init__()
-        self.dir = Path(dirname)
-        self.logger = get_logger(dirname)
-        self.csv_dir = csv_dir
-        self.fs = fs
+#     def __init__(
+#         self,
+#         dirname: str,
+#         patten: str = "**/*_mic.wav",
+#         keymap: Optional[Tuple[str, str]] = None,
+#         flist: Optional[str] = None,
+#         clean_dirname: Optional[str] = None,
+#         fs: int = 16000,
+#         raw_len: Optional[float] = None,
+#         nlen: float = 0.0,
+#         min_len: float = 0.0,  # padding 0 to `nlen`
+#         csv_dir: str = "manifest",
+#         seed: Optional[int] = None,
+#         norm: Optional[int] = None,
+#         return_abspath: bool = False,
+#     ):
+#         super().__init__()
+#         self.dir = Path(dirname)
+#         self.logger = get_logger(dirname)
+#         self.csv_dir = csv_dir
+#         self.fs = fs
 
-        if flist is None:
-            flist = os.path.join(csv_dir, os.path.split(dirname)[-1] + ".csv")
-        elif os.path.isabs(flist):  # abspath
-            flist = flist
-        else:  # relative path
-            flist = os.path.join(csv_dir, flist)
+#         if flist is None:
+#             flist = os.path.join(csv_dir, os.path.split(dirname)[-1] + ".csv")
+#         elif os.path.isabs(flist):  # abspath
+#             flist = flist
+#         else:  # relative path
+#             flist = os.path.join(csv_dir, flist)
 
-        self.clean_dir = self.dir if clean_dirname is None else Path(clean_dirname)
-        self.N = int(nlen * fs)
-        self.minN = int(min_len * fs)
-        self.rawN = int(raw_len * fs) if raw_len is not None else raw_len
+#         self.clean_dir = self.dir if clean_dirname is None else Path(clean_dirname)
+#         self.N = int(nlen * fs)
+#         self.minN = int(min_len * fs)
+#         self.rawN = int(raw_len * fs) if raw_len is not None else raw_len
 
-        self.f_list = self._prepare(flist, patten, keymap, clean_dirname)
-        if seed is not None:
-            random.seed(seed)
-            random.shuffle(self.f_list)
+#         self.f_list = self._prepare(flist, patten, keymap, clean_dirname)
+#         if seed is not None:
+#             random.seed(seed)
+#             random.shuffle(self.f_list)
 
-        self.norm = norm
-        self.return_abspath = return_abspath
+#         self.norm = norm
+#         self.return_abspath = return_abspath
 
-        self.logger.info(f"Loading {dirname} {len(self.f_list)} files.")
-        self.logger.warn(f"Note: treating the #CH0 of the target speech as the label.")
+#         self.logger.info(f"Loading {dirname} {len(self.f_list)} files.")
+#         self.logger.warn(f"Note: treating the #CH0 of the target speech as the label.")
 
-    @property
-    def dirname(self):
-        return "WHAMR_2CH_SE"
+#     @property
+#     def dirname(self):
+#         return "WHAMR_2CH_SE"
 
-    def _rearange(self, flist):
-        """split audios through wave file length
-        flist: [((f1, f2,...,f_target), N), (...)]
-        """
-        f_list = []
+#     def _rearange(self, flist):
+#         """split audios through wave file length
+#         flist: [((f1, f2,...,f_target), N), (...)]
+#         """
+#         f_list = []
 
-        total_N = 0
-        for f, nlen in flist:
-            nlen = int(nlen)
-            total_N += nlen
-            if self.N != 0 and self.minN != 0:
-                st = 0
-                if nlen < self.minN:
-                    continue
+#         total_N = 0
+#         for f, nlen in flist:
+#             nlen = int(nlen)
+#             total_N += nlen
+#             if self.N != 0 and self.minN != 0:
+#                 st = 0
+#                 if nlen < self.minN:
+#                     continue
 
-                while nlen - st >= self.N:
-                    f_list.append({"f": f, "start": st, "end": st + self.N, "pad": 0})
-                    st += self.N
+#                 while nlen - st >= self.N:
+#                     f_list.append({"f": f, "start": st, "end": st + self.N, "pad": 0})
+#                     st += self.N
 
-                if nlen - st >= self.minN:
-                    f_list.append({"f": f, "start": st, "end": nlen, "pad": self.N - (nlen - st)})
-            else:
-                f_list.append({"f": f, "start": 0, "end": int(nlen), "pad": 0})
+#                 if nlen - st >= self.minN:
+#                     f_list.append({"f": f, "start": st, "end": nlen, "pad": self.N - (nlen - st)})
+#             else:
+#                 f_list.append({"f": f, "start": 0, "end": int(nlen), "pad": 0})
 
-        self.logger.info(
-            f"{int(total_N // self.fs // 3600):.2f} h={int(total_N // self.fs // 60):.2f} min, {len(flist)} files"
-        )
-        return f_list
+#         self.logger.info(
+#             f"{int(total_N // self.fs // 3600):.2f} h={int(total_N // self.fs // 60):.2f} min, {len(flist)} files"
+#         )
+#         return f_list
 
-    def _prepare(
-        self,
-        fname: Optional[str],
-        patten: str,
-        keymap: Optional[Tuple[str, str]] = None,
-        clean_dirname: Optional[str] = None,
-    ) -> List:
-        """
-        fname: file path of a file list
-        """
-        assert keymap is None or clean_dirname is None
+#     def _prepare(
+#         self,
+#         fname: Optional[str],
+#         patten: str,
+#         keymap: Optional[Tuple[str, str]] = None,
+#         clean_dirname: Optional[str] = None,
+#     ) -> List:
+#         """
+#         fname: file path of a file list
+#         """
+#         assert keymap is None or clean_dirname is None
 
-        if fname is not None and os.path.exists(fname):
-            # self.logger.info(f"Loading {fname}")
-            f_list = load_f_list(fname, (str(self.dir), str(self.clean_dir)))
-        else:  # csv file not exist.
-            self.logger.info(f"Flist {fname} not exist, regenerating.")
-            f_list = []
-            f_mic_list = list(map(str, self.dir.glob(patten)))
-            for f_mic in tqdm(f_mic_list, ncols=80):
-                if keymap is not None:
-                    # under same directory with different name
-                    dirp, f_mic_name = os.path.split(f_mic)
-                    f_sph = f_mic_name.replace(*keymap)
-                    f_sph = os.path.join(dirp, f_sph)
-                elif clean_dirname is not None:
-                    # under different directory with same name
-                    f_sph = f_mic.replace(str(self.dir), clean_dirname)
-                    f_sph = re.sub(r"_(A|B)\.wav", ".wav", f_sph)
-                else:
-                    raise RuntimeError("keymap and clean_dirname are both None.")
+#         if fname is not None and os.path.exists(fname):
+#             # self.logger.info(f"Loading {fname}")
+#             f_list = load_f_list(fname, (str(self.dir), str(self.clean_dir)))
+#         else:  # csv file not exist.
+#             self.logger.info(f"Flist {fname} not exist, regenerating.")
+#             f_list = []
+#             f_mic_list = list(map(str, self.dir.glob(patten)))
+#             for f_mic in tqdm(f_mic_list, ncols=80):
+#                 if keymap is not None:
+#                     # under same directory with different name
+#                     dirp, f_mic_name = os.path.split(f_mic)
+#                     f_sph = f_mic_name.replace(*keymap)
+#                     f_sph = os.path.join(dirp, f_sph)
+#                 elif clean_dirname is not None:
+#                     # under different directory with same name
+#                     f_sph = f_mic.replace(str(self.dir), clean_dirname)
+#                     f_sph = re.sub(r"_(A|B)\.wav", ".wav", f_sph)
+#                 else:
+#                     raise RuntimeError("keymap and clean_dirname are both None.")
 
-                if self.rawN is None:
-                    dmic, _ = audioread(f_mic)
-                    N = len(dmic)
-                else:
-                    N = self.rawN
-                f_list.append(((f_mic, f_sph), N))
+#                 if self.rawN is None:
+#                     dmic, _ = audioread(f_mic)
+#                     N = len(dmic)
+#                 else:
+#                     N = self.rawN
+#                 f_list.append(((f_mic, f_sph), N))
 
-            save_f_list(
-                fname, f_list, (str(self.dir), str(self.clean_dir))
-            ) if fname is not None else None
+#             save_f_list(
+#                 fname, f_list, (str(self.dir), str(self.clean_dir))
+#             ) if fname is not None else None
 
-        return self._rearange(f_list)
+#         return self._rearange(f_list)
 
-    def __len__(self):
-        return len(self.f_list)
+#     def __len__(self):
+#         return len(self.f_list)
 
-    def __getitem__(self, index) -> Tuple[torch.Tensor, torch.Tensor]:
-        el = self.f_list[index]
-        f_mic, f_sph = el["f"]
-        st, ed, pd = el["start"], el["end"], el["pad"]
+#     def __getitem__(self, index) -> Tuple[torch.Tensor, torch.Tensor]:
+#         el = self.f_list[index]
+#         f_mic, f_sph = el["f"]
+#         st, ed, pd = el["start"], el["end"], el["pad"]
 
-        # T,C
-        d_mic, fs_1 = audioread(f_mic, sub_mean=True, target_level=self.norm)
-        d_sph, fs_2 = audioread(f_sph, sub_mean=True, target_level=self.norm)
-        assert fs_1 == fs_2
+#         # T,C
+#         d_mic, fs_1 = audioread(f_mic, sub_mean=True, target_level=self.norm)
+#         d_sph, fs_2 = audioread(f_sph, sub_mean=True, target_level=self.norm)
+#         assert fs_1 == fs_2
 
-        # d_mic: T,C; d_sph: T,
-        d_mic = np.pad(d_mic[st:ed], ((0, pd), (0, 0)), "constant", constant_values=0)
-        d_sph = np.pad(d_sph[st:ed], (0, pd), "constant", constant_values=0)
+#         # d_mic: T,C; d_sph: T,
+#         d_mic = np.pad(d_mic[st:ed], ((0, pd), (0, 0)), "constant", constant_values=0)
+#         d_sph = np.pad(d_sph[st:ed], (0, pd), "constant", constant_values=0)
 
-        return torch.from_numpy(d_mic).float(), torch.from_numpy(d_sph[..., 0]).float()
+#         return torch.from_numpy(d_mic).float(), torch.from_numpy(d_sph[..., 0]).float()
 
-    def __iter__(self):
-        self.pick_idx = 0
-        return self
+#     def __iter__(self):
+#         self.pick_idx = 0
+#         return self
 
-    def __next__(self) -> Tuple[torch.Tensor, str]:
-        """used for predict api
-        return: data, relative path
-        """
-        if self.pick_idx < len(self.f_list):
-            el = self.f_list[self.pick_idx]
-            f_mic, f_sph = el["f"]
+#     def __next__(self) -> Tuple[torch.Tensor, str]:
+#         """used for predict api
+#         return: data, relative path
+#         """
+#         if self.pick_idx < len(self.f_list):
+#             el = self.f_list[self.pick_idx]
+#             f_mic, f_sph = el["f"]
 
-            data, _ = audioread(f_mic, target_level=self.norm)
-            self.pick_idx += 1
+#             data, _ = audioread(f_mic, target_level=self.norm)
+#             self.pick_idx += 1
 
-            fname = (
-                f_sph
-                if self.return_abspath
-                else str(Path(f_sph).relative_to(self.clean_dir.parent))
-            )
-            return torch.from_numpy(data).float()[None, :], fname
-        else:
-            raise StopIteration
+#             fname = (
+#                 f_sph
+#                 if self.return_abspath
+#                 else str(Path(f_sph).relative_to(self.clean_dir.parent))
+#             )
+#             return torch.from_numpy(data).float()[None, :], fname
+#         else:
+#             raise StopIteration
 
 
 @tables.register("datasets", "vadset")

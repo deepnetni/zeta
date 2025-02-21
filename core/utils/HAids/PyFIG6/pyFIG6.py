@@ -174,7 +174,7 @@ def apply_subbands_gain(xk, gain, freqs, subbands, decay=None):
     return xk_out
 
 
-def FIG6_compensation(HL, inp, fs=16000, nframe=128, nhop=64):
+def FIG6_compensation(HL, inp, fs=16000, nframe=128, nhop=64, SPL_off=None):
     """
     HL: hearing level at [250, 500, 1000, 2000, 4000, 8000]Hz, dB HL.
     inp: signal to compensation. shape, B,T
@@ -210,7 +210,9 @@ def FIG6_compensation(HL, inp, fs=16000, nframe=128, nhop=64):
         ChannelNum_ft = np.array([0, 750, 1500, 3000, 8001])
         ChannelNum_fc = np.array([500, 1000, 2000, 4000])
     elif ChannelNum == 6:
-        SPL_offset = 94.9133059 * np.ones(ChannelNum)
+        SPL_offset = (
+            94.9133059 * np.ones(ChannelNum) if SPL_off is None else SPL_off * np.ones(ChannelNum)
+        )
         ChannelNum_ft = np.array([0, 250, 625, 1375, 2500, 3500, 8001])
         ChannelNum_fc = np.array([250, 500, 1000, 2000, 3000, 4000])
     elif ChannelNum == 8:
@@ -226,7 +228,10 @@ def FIG6_compensation(HL, inp, fs=16000, nframe=128, nhop=64):
             [250, 375, 500, 750, 1000, 1375, 1750, 2250, 3000, 3875, 4875, 6250]
         )
     elif ChannelNum == 16:
-        SPL_offset = 96.7119344 * np.ones(ChannelNum)
+        SPL_offset = (
+            96.7119344 * np.ones(ChannelNum) if SPL_off is None else SPL_off * np.ones(ChannelNum)
+        )
+
         # fmt: off
         ChannelNum_ft = np.array([0, 250, 375, 500, 625, 750, 1000, 1250, 1625, 2000, 2375, 2875, 3500, 4250, 5125, 6125, 8001])
         ChannelNum_fc = np.array([250, 375, 500, 625, 750, 1000, 1125, 1375, 1750, 2125, 2625, 3125, 3875, 4625, 5500, 6625])
@@ -315,6 +320,7 @@ def FIG6_compensation(HL, inp, fs=16000, nframe=128, nhop=64):
         splIn[splIn < 0] = 0
         splBuff = splIn
         spl_l.append(splIn)  # B,C
+
     spl_in = np.stack(spl_l, axis=1)  # B,T,C
 
     spl_out = np.where(spl_in < TK[0], kn[:, 0] * spl_in + bn[:, 0], spl_in)
@@ -324,6 +330,8 @@ def FIG6_compensation(HL, inp, fs=16000, nframe=128, nhop=64):
 
     gain_dB = spl_out - spl_in  # B,T,C
     gain = 10 ** (gain_dB / 20)  # the gain applied to the spectrum
+
+    meta = dict(spl_in=spl_in, gain=gain_dB)
 
     if ChannelNum == nbin:
         # b,t,f * b,t,c
@@ -345,10 +353,12 @@ def FIG6_compensation(HL, inp, fs=16000, nframe=128, nhop=64):
         window=win,
         center=False,
     )  # output shape B,T
-    return x.squeeze()
+    return x.squeeze(), meta
 
 
-def FIG6_compensation_vad(HL, inp, fs=16000, nframe=128, nhop=64, vad=None, ret_vad=False):
+def FIG6_compensation_vad(
+    HL, inp, fs=16000, nframe=128, nhop=64, vad=None, ret_vad=False, SPL_off=None
+):
     if vad is None:
         vad_detect = VAD(10, fs, level=2)
         vad_detect.reset()
@@ -357,13 +367,13 @@ def FIG6_compensation_vad(HL, inp, fs=16000, nframe=128, nhop=64, vad=None, ret_
         x_vad[: len(vad_lbl)] = vad_lbl
     else:
         x_vad = vad
-    comp = FIG6_compensation(HL, inp, fs, nframe, nhop)
+    comp, meta = FIG6_compensation(HL, inp, fs, nframe, nhop, SPL_off)
     inp = inp[: len(comp)]
     x_vad = x_vad[: len(comp)]
     comp = np.where(x_vad > 0.5, comp, inp)
 
     if ret_vad:
-        return comp, x_vad
+        return comp, x_vad, meta
     else:
         return comp
 

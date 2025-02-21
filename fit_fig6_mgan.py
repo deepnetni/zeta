@@ -15,6 +15,7 @@ from core.datasets_manager import get_datasets
 from core.Trainer_wGAN_for_fig6 import (
     Trainer,
     TrainerGumbelCodebook,
+    TrainerHAMGAN,
     TrainerMultiOutputs,
     TrainerforBaselines,
 )
@@ -169,13 +170,14 @@ if __name__ == "__main__":
 
     if md_name in [
         "baseline_fig6",
-        "condConformer",
         "baseline_fig6_linear",
-        "xkcConformer",
-        "DiTConformer",
+        "condConformer",
+        "IterCondConformer",
+        "FTCRN",
+        "FTCRN_COND",
+        "FTCRN_COND_Iter",
     ]:
         Trainer = Trainer
-        # Trainer = TrainerPhase
     elif md_name == "GumbelCodebook":
         Trainer = TrainerGumbelCodebook
     elif md_name in [
@@ -185,8 +187,13 @@ if __name__ == "__main__":
         "FTCRN_BASE_VAD",
     ]:
         Trainer = TrainerVAD
+    elif md_name == "HAMGAN":
+        Trainer = TrainerHAMGAN
     else:
-        Trainer = Trainer
+        # Trainer = Trainer
+        Trainer = TrainerforBaselines
+
+    print("Trainer Class: ", Trainer.__name__)
 
     cprint.r(f"current: {md_name}")
     model = tables.models.get(md_name)
@@ -197,9 +204,6 @@ if __name__ == "__main__":
         net = model(**md_conf)
     else:
         net = model()
-        Trainer = TrainerforBaselines
-
-    print("Trainer Class: ", Trainer.__name__)
 
     if args.train:
         assert (

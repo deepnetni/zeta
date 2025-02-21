@@ -154,14 +154,23 @@ def is_clipped(audio, clipping_threshold=0.99):
     return any(abs(audio) > clipping_threshold)
 
 
-def normalize(audio: np.ndarray, target_level=-25):
+def rms(audio, db=False):
+    audio = np.asarray(audio)
+    rms_value = np.sqrt(np.mean(audio**2))
+    if db:
+        return 20 * np.log10(rms_value + np.finfo(float).eps)
+    else:
+        return rms_value
+
+
+def normalize(audio: np.ndarray, target_level: float = -25):
     """Normalize the signal power to the target level
     Input: T,C for stereo, T, for mono
     """
     rms = (audio**2).mean(axis=0, keepdims=True) ** 0.5
     scalar = 10 ** (target_level / 20) / (rms + EPS)
     audio = audio * scalar
-    return audio
+    return audio, scalar
 
 
 def align_ref_to_mic(d_ref: np.ndarray, d_mic: np.ndarray, fs: int = 16000) -> np.ndarray:
@@ -174,7 +183,9 @@ def align_ref_to_mic(d_ref: np.ndarray, d_mic: np.ndarray, fs: int = 16000) -> n
     return d_ref
 
 
-def audioread(path, sub_mean=False, start=0, stop=None, target_level: Optional[int] = None):
+def audioread(
+    path, sub_mean=False, start=0, stop=None, target_level: Optional[int] = None
+) -> Tuple[np.ndarray, int]:
     """Function to read audio
     Args:
         target_level: None,int, normalize the power of data to `target_level`, default None, could be -25 dB;

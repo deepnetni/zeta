@@ -75,6 +75,7 @@ def pad_to_longest_aec(batch):
     return mic, ref, label, torch.tensor(seq_len)
 
 
+@tables.register("datasets", "basic")
 class TrunkBasic(Dataset):
     """Dataset base class
     Search microphone wav files by pattern.
@@ -83,7 +84,7 @@ class TrunkBasic(Dataset):
     def __init__(
         self,
         dirname: str,
-        pattern: str = "**/*.wav",
+        pattern: str = "**/[!.]*.wav",
         clean_dirname: Optional[str] = None,
         flist: Optional[str] = None,
         nlen: float = 0.0,
@@ -169,7 +170,7 @@ class TrunkBasic(Dataset):
                     st += N
                     remain_N -= N
 
-                if end - st > self.minN:
+                if self.minN != 0 and end - st > self.minN:
                     buffer.append({"f": f, "start": st, "end": end, "pad": 0})
                     buffer_len += end - st
 
@@ -309,20 +310,10 @@ class FIG6Trunk(TrunkBasic):
         keymap: Optional[Tuple[str, ...]] = None,
         **kwargs,
     ):
-        super().__init__(
-            dirname,
-            pattern,
-            clean_dirname,
-            flist,
-            nlen,
-            min_len,
-            fs,
-            seed,
-            csv_dir,
-            keymap,
-            **kwargs,
-        )
-
+        # fmt: off
+        super().__init__(dirname, pattern, clean_dirname, flist, nlen, min_len, fs,
+                         seed, csv_dir, keymap, **kwargs)
+        # fmt: on
         self.load_vad = kwargs.get("vad", False)
         self.return_clean = kwargs.get("return_clean", False)
 
@@ -411,19 +402,11 @@ class FIG6TrunkV2(FIG6Trunk):
         keymap: Optional[Tuple[str, ...]] = None,
         **kwargs,
     ):
-        super().__init__(
-            dirname,
-            pattern,
-            clean_dirname,
-            flist,
-            nlen,
-            min_len,
-            fs,
-            seed,
-            csv_dir,
-            keymap,
-            **kwargs,
-        )
+        # fmt: off
+        super().__init__(dirname, pattern, clean_dirname, flist, nlen, min_len,
+            fs, seed, csv_dir, keymap, **kwargs)
+        # fmt: on
+
         hl_f = kwargs.get("audiogram")
         assert hl_f is not None
         self.hl_dict = {}
@@ -439,6 +422,28 @@ class FIG6TrunkV2(FIG6Trunk):
         file_id = fname.split(".")[0]
         hl = self.hl_dict[file_id]
         return hl
+
+
+@tables.register("datasets", "wham")
+class WHAM(TrunkBasic):
+    def __init__(
+        self,
+        dirname: str,
+        pattern: str = "**/*.wav",
+        clean_dirname: Optional[str] = None,
+        flist: Optional[str] = None,
+        nlen: float = 0,
+        min_len: float = 0,
+        fs: int = 16000,
+        seed: Optional[int] = None,
+        csv_dir: str = __file__.rsplit("/", 3)[0] + "/manifest",
+        keymap: Optional[Tuple[str, ...]] = None,
+        **kwargs,
+    ):
+        # fmt: off
+        super().__init__(dirname, pattern, clean_dirname, flist, nlen,
+            min_len, fs, seed, csv_dir, keymap, **kwargs)
+        # fmt: on
 
 
 if __name__ == "__main__":

@@ -56,12 +56,13 @@ class mpStarMap(object):
             param = args
             # out = p.map(func, tqdm(param[0], total=len(args), ncols=80), *param[1:])
 
+            # print(args)
+            # print(kwargs)
             out = tqdm_pathos.starmap(
                 func,
                 zip(*param),
                 n_cpus=self.num,
                 tqdm_kwargs=dict(ncols=80),
-                leave=self.leave,
                 **kwargs,
             )
 

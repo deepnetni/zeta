@@ -200,6 +200,23 @@ FIG6smallVad:
        - "target.wav"
     vad: True
 
+wham:
+  new: "basic"
+  train:
+    dirname: '/home/deepni/disk/wham/generated/wav16k/max/tr/mix_both'
+    clean_dirname: '/home/deepni/disk/wham/generated/wav16k/max/tr/mix_clean'
+    across_file: True
+    flist: "wham_tr.csv"
+    nlen: 5.0
+  valid:
+    dirname: '/home/deepni/disk/wham/generated/wav16k/max/cv/mix_both'
+    clean_dirname: '/home/deepni/disk/wham/generated/wav16k/max/cv/mix_clean'
+    flist: "wham_cv.csv"
+  vtest:
+    dirname: '/home/deepni/disk/wham/generated/wav16k/max/tt/mix_both'
+    clean_dirname: '/home/deepni/disk/wham/generated/wav16k/max/tt/mix_clean'
+    flist: "wham_tt.csv"
+
 ########### Multi-channel NS tasks ############
 l3das22:
   train:
@@ -219,6 +236,7 @@ chime3:
     path: '/home/deepni/datasets/CHiME3'
   vtest:
     path: '/home/deepni/datasets/CHiME3'
+
 
 
 whamr:
