@@ -128,6 +128,8 @@ class TrunkBasic(Dataset):
 
         if across_files:
             self.f_list = self._rearange_across_files(f_pairs)
+            for i in self.f_list:
+                print(i)
         else:
             self.f_list = self._rearange(f_pairs)
 
@@ -151,27 +153,37 @@ class TrunkBasic(Dataset):
         f_list = []
         buffer = []
         buffer_len = 0
+        # idx = 0
 
         for f, nlen in flist:
+            # f = os.path.split(f[0])[-1]
             if self.N != 0:
                 st, end = 0, int(nlen)
-                remain_N = buffer_len + end - st
+                remain_N = buffer_len + int(nlen)
 
                 while remain_N >= self.N:
-                    if len(buffer) != 0:
+                    if buffer_len != 0:
                         N = self.N - buffer_len
-                        f_list.append([*buffer, {"f": f, "start": st, "end": st + N, "pad": 0}])
-                        buffer.clear()
-                        buffer_len = 0
-                    else:
-                        N = min(self.N, end - st)
-                        f_list.append([{"f": f, "start": st, "end": st + N, "pad": 0}])
+                        buffer.append({"f": f, "start": st, "end": st + N, "pad": -1})
+                    else:  # buf is empty
+                        N = self.N
+                        buffer.append({"f": f, "start": st, "end": st + N, "pad": 0})
+
+                    f_list.append(buffer)
+                    buffer = []
+                    buffer_len = 0
+
+                    # if idx == 4:
+                    #     for i, f in enumerate(f_list):
+                    #         print(i, f)
+                    #     sys.exit()
+                    # idx += 1
 
                     st += N
-                    remain_N -= N
+                    remain_N -= self.N
 
-                if self.minN != 0 and end - st > self.minN:
-                    buffer.append({"f": f, "start": st, "end": end, "pad": 0})
+                if remain_N > self.minN:
+                    buffer.append({"f": f, "start": st, "end": end, "pad": -1})
                     buffer_len += end - st
 
             else:  # self.N == 0
@@ -289,8 +301,8 @@ class TrunkBasic(Dataset):
             f_sph = os.path.join(dirp, f_sph)
             f_sph = f_sph.replace(str(self.dir), str(self.clean_dir))
 
-            dmic, _ = audioread(f_mic)
-            element.append(((f_mic, f_sph), len(dmic)))
+            dsph, _ = audioread(f_sph)
+            element.append(((f_mic, f_sph), len(dsph)))
         return element
 
 
@@ -417,15 +429,15 @@ class FIG6TrunkV2(FIG6Trunk):
                 file_id = parts[0]
                 self.hl_dict[file_id] = list(map(float, parts[1:]))
 
-    def get_audiogram(self, f_mic):
+    def get_audiogram(self, f_mic: str):
         _, fname = os.path.split(f_mic)
-        file_id = fname.split(".")[0]
+        file_id = fname.removesuffix(".wav")
         hl = self.hl_dict[file_id]
         return hl
 
 
-@tables.register("datasets", "wham")
-class WHAM(TrunkBasic):
+@tables.register("datasets", "FIG6_v3")
+class FIG6TrunkV3(FIG6Trunk):
     def __init__(
         self,
         dirname: str,
@@ -441,9 +453,18 @@ class WHAM(TrunkBasic):
         **kwargs,
     ):
         # fmt: off
-        super().__init__(dirname, pattern, clean_dirname, flist, nlen,
-            min_len, fs, seed, csv_dir, keymap, **kwargs)
+        super().__init__(dirname, pattern, clean_dirname, flist, nlen, min_len,
+            fs, seed, csv_dir, keymap, **kwargs)
         # fmt: on
+
+    def get_audiogram(self, f_mic: str):
+        dirp, fname = os.path.split(f_mic)
+        hl_f = fname.removesuffix(".wav").replace("_nearend", "") + ".json"
+        hl_f = os.path.join(dirp, hl_f)
+        with open(hl_f, "r") as fp:
+            ctx = json.load(fp)
+            hl = ast.literal_eval(ctx["HL"])
+        return hl
 
 
 if __name__ == "__main__":

@@ -211,6 +211,7 @@ class Trainer(EngineGAN):
             pbar.set_postfix(**metric_rec.state_dict())
 
         dset_dict["valid"] = metric_rec.state_dict()
+        print(dset_dict)
 
         # -----------------------#
         ##### vtest dataset ######
@@ -224,6 +225,7 @@ class Trainer(EngineGAN):
         )
 
         generate_filter_params(240000)
+        # generate_filter_params(119808)
         for mic, sph, hl, nlen in pbar:
             mic = mic.to(self.device)  # B,T,6
             sph = sph.to(self.device)  # b,c,t,f
@@ -571,7 +573,7 @@ class Trainer(EngineGAN):
 
         pbar = tqdm(
             self.train_loader,
-            # ncols=160,
+            ncols=160,
             leave=True,
             desc=f"Epoch-{epoch}/{self.epochs}",
         )
@@ -620,7 +622,7 @@ class Trainer(EngineGAN):
 
         pbar = tqdm(
             self.valid_loader,
-            # ncols=300,
+            ncols=160,
             leave=True,
             desc=f"Valid-{epoch}/{self.epochs}",
         )
@@ -665,7 +667,7 @@ class Trainer(EngineGAN):
         dirname = os.path.split(self.vtest_dset.dirname)[-1]
         pbar = tqdm(
             self.vtest_loader,
-            # ncols=300,
+            ncols=160,
             leave=False,
             desc=f"vTest-{epoch}/{dirname}",
         )
@@ -789,7 +791,7 @@ class TrainerforBaselines(Trainer):
 
         pbar = tqdm(
             self.train_loader,
-            # ncols=160,
+            ncols=160,
             leave=True,
             desc=f"Epoch-{epoch}/{self.epochs}",
         )
@@ -1169,13 +1171,13 @@ class TrainerCompNetGAN(Trainer):
         mag_lv = self.mag_loss_fn(esti_mag, sph_mag)
         com_mag_lv = self.com_mag_loss_fn(post_spec, sph_spec)
 
-        loss = com_mag_lv + 0.5 * mag_lv + 0.2 * sisnr_lv
+        loss = com_mag_lv + 0.5 * mag_lv  # + 0.2 * sisnr_lv
 
         loss_dict = {
             "loss": loss,
             # "stft_lv": stft_lv.detach(),
             "mag_lv": 0.5 * mag_lv.detach(),
-            "sisnr_lv": 0.2 * sisnr_lv.detach(),
+            # "sisnr_lv": 0.2 * sisnr_lv.detach(),
             "com_mag_lv": com_mag_lv.detach(),
         }
 
@@ -1236,7 +1238,7 @@ class TrainerCompNetGAN(Trainer):
 
         pbar = tqdm(
             self.train_loader,
-            # ncols=160,
+            ncols=160,
             leave=True,
             desc=f"Epoch-{epoch}/{self.epochs}",
         )
@@ -1314,7 +1316,7 @@ class TrainerMC(Trainer):
         metric_rec = REC()
         pbar = tqdm(
             self.valid_loader,
-            # ncols=300,
+            ncols=160,
             leave=False,
             desc=f"v-{self.valid_dset.dirname}",
         )
@@ -1357,7 +1359,7 @@ class TrainerMC(Trainer):
         metric_rec = REC()
         pbar = tqdm(
             self.vtest_loader,
-            # ncols=300,
+            ncols=160,
             leave=False,
             desc=f"v-{self.vtest_dset.dirname}",
         )

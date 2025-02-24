@@ -7,10 +7,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from scipy.signal import get_window
+from profiler import check_profile
 
 from utils.check_flops import check_flops
 from JointNSHModel import expand_HT
 from utils.register import tables
+from torch.profiler import record_function
 
 
 # this is from conv_stft https://github.com/huyanxin/DeepComplexCRN
@@ -209,6 +211,87 @@ class upsampling(nn.Module):
 
 
 # dilated dense block
+# class dilatedDenseBlock(nn.Module):
+#     def __init__(self, in_ch, out_ch, n_layers):
+#         super(dilatedDenseBlock, self).__init__()
+
+#         self.input_layer = causalConv2d(
+#             in_ch, in_ch // 2, kernel_size=(3, 2), padding=(1, 1)
+#         )  # channel half
+#         self.prelu1 = nn.PReLU()
+
+#         # dilated dense layer
+#         self.layers = nn.ModuleList()
+#         for i in range(n_layers):
+#             self.caus_padd = ((2**i) // 2) * 2
+#             if i == 0:
+#                 self.caus_padd = 1
+
+#             self.layers.append(
+#                 nn.Sequential(
+#                     # depth-wise separable conv
+#                     causalConv2d(
+#                         in_ch // 2 + i * in_ch // 2,
+#                         in_ch // 2,
+#                         kernel_size=(3, 2),
+#                         padding=(2**i, self.caus_padd),
+#                         dilation=2**i,
+#                         groups=in_ch // 2,
+#                     ),
+#                     # depth-wise
+#                     nn.Conv2d(in_ch // 2, in_ch // 2, kernel_size=1),  # pointwise
+#                     nn.GroupNorm(1, in_ch // 2, eps=1e-8),
+#                     nn.PReLU(),
+#                 )
+#             )
+
+#         self.out_layer = causalConv2d(
+#             in_ch // 2, out_ch, kernel_size=(3, 2), padding=(1, 1)
+#         )  # channel revert
+#         self.prelu2 = nn.PReLU()
+
+#     def forward(self, x):
+#         x = self.input_layer(x)  # C: in_ch//2
+#         x = self.prelu1(x)
+
+#         out1 = self.layers[0](x)
+
+#         # out2 = self.layers[1](torch.cat([out1, x], dim=1))
+#         out2 = torch.cat([out1, x], dim=1)  # C: in_ch//2 * 2
+#         out2 = self.layers[1](out2)
+
+#         # out3 = self.layers[2](torch.cat([out2, out1, x], dim=1))
+#         out3 = torch.cat([out2, out1], dim=1)
+#         out3 = torch.cat([out3, x], dim=1)  # C: in_ch//2 * 3
+#         out3 = self.layers[2](out3)
+
+#         # out4 = self.layers[3](torch.cat([out3, out2, out1, x], dim=1))
+#         out4 = torch.cat([out3, out2], dim=1)  # C: in_ch//2 * 4
+#         out4 = torch.cat([out4, out1], dim=1)
+#         out4 = torch.cat([out4, x], dim=1)
+#         out4 = self.layers[3](out4)
+
+#         # out5 = self.layers[4](torch.cat([out4, out3, out2, out1, x], dim=1))
+#         out5 = torch.cat([out4, out3], dim=1)  # C: in_ch//2 * 5
+#         out5 = torch.cat([out5, out2], dim=1)
+#         out5 = torch.cat([out5, out1], dim=1)
+#         out5 = torch.cat([out5, x], dim=1)
+#         out5 = self.layers[4](out5)
+
+#         # out = self.layers[5](torch.cat([out5, out4, out3, out2, out1, x], dim=1))
+#         out = torch.cat([out5, out4], dim=1)  # C: in_ch//2 * 6
+#         out = torch.cat([out, out3], dim=1)
+#         out = torch.cat([out, out2], dim=1)
+#         out = torch.cat([out, out1], dim=1)
+#         out = torch.cat([out, x], dim=1)
+#         out = self.layers[5](out)
+
+#         out = self.out_layer(out)
+#         out = self.prelu2(out)
+
+#         return out
+
+
 class dilatedDenseBlock(nn.Module):
     def __init__(self, in_ch, out_ch, n_layers):
         super(dilatedDenseBlock, self).__init__()
@@ -220,6 +303,7 @@ class dilatedDenseBlock(nn.Module):
 
         # dilated dense layer
         self.layers = nn.ModuleList()
+        self.depth = n_layers
         for i in range(n_layers):
             self.caus_padd = ((2**i) // 2) * 2
             if i == 0:
@@ -252,37 +336,10 @@ class dilatedDenseBlock(nn.Module):
         x = self.input_layer(x)  # C: in_ch//2
         x = self.prelu1(x)
 
-        out1 = self.layers[0](x)
-
-        # out2 = self.layers[1](torch.cat([out1, x], dim=1))
-        out2 = torch.cat([out1, x], dim=1)  # C: in_ch//2 * 2
-        out2 = self.layers[1](out2)
-
-        # out3 = self.layers[2](torch.cat([out2, out1, x], dim=1))
-        out3 = torch.cat([out2, out1], dim=1)
-        out3 = torch.cat([out3, x], dim=1)  # C: in_ch//2 * 3
-        out3 = self.layers[2](out3)
-
-        # out4 = self.layers[3](torch.cat([out3, out2, out1, x], dim=1))
-        out4 = torch.cat([out3, out2], dim=1)  # C: in_ch//2 * 4
-        out4 = torch.cat([out4, out1], dim=1)
-        out4 = torch.cat([out4, x], dim=1)
-        out4 = self.layers[3](out4)
-
-        # out5 = self.layers[4](torch.cat([out4, out3, out2, out1, x], dim=1))
-        out5 = torch.cat([out4, out3], dim=1)  # C: in_ch//2 * 5
-        out5 = torch.cat([out5, out2], dim=1)
-        out5 = torch.cat([out5, out1], dim=1)
-        out5 = torch.cat([out5, x], dim=1)
-        out5 = self.layers[4](out5)
-
-        # out = self.layers[5](torch.cat([out5, out4, out3, out2, out1, x], dim=1))
-        out = torch.cat([out5, out4], dim=1)  # C: in_ch//2 * 6
-        out = torch.cat([out, out3], dim=1)
-        out = torch.cat([out, out2], dim=1)
-        out = torch.cat([out, out1], dim=1)
-        out = torch.cat([out, x], dim=1)
-        out = self.layers[5](out)
+        skip = x
+        for i in range(self.depth):
+            out = self.layers[i](skip)
+            skip = torch.cat([out, skip], dim=1)
 
         out = self.out_layer(out)
         out = self.prelu2(out)
@@ -345,7 +402,7 @@ class CTFA(nn.Module):
 
 # Multi-Scale Feature Extraction (MSFE) - e6 (for encoder part)
 class MSFEe6(nn.Module):
-    def __init__(self, in_ch, mid_ch, out_ch):
+    def __init__(self, in_ch, mid_ch, out_ch, depth=2):
         super(MSFEe6, self).__init__()
         self.input_layer = INCONV(in_ch, out_ch)
 
@@ -358,7 +415,8 @@ class MSFEe6(nn.Module):
         self.en6 = CONV(mid_ch, mid_ch)
 
         # bottleneck
-        self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 6)
+        # self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 6)
+        self.ddense = dilatedDenseBlock(mid_ch, mid_ch, depth)
 
         # decoder
         self.de1 = SPCONV(mid_ch * 2, mid_ch)
@@ -400,7 +458,7 @@ class MSFEe6(nn.Module):
 
 # Multi-Scale Feature Extraction (MSFE) - e5
 class MSFEe5(nn.Module):
-    def __init__(self, in_ch, mid_ch, out_ch):
+    def __init__(self, in_ch, mid_ch, out_ch, depth=2):
         super(MSFEe5, self).__init__()
         self.input_layer = INCONV(in_ch, out_ch)
 
@@ -412,7 +470,8 @@ class MSFEe5(nn.Module):
         self.en5 = CONV(mid_ch, mid_ch)
 
         # bottleneck
-        self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 6)
+        # self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 6)
+        self.ddense = dilatedDenseBlock(mid_ch, mid_ch, depth)
 
         # decoder
         self.de1 = SPCONV(mid_ch * 2, mid_ch)
@@ -451,7 +510,7 @@ class MSFEe5(nn.Module):
 
 # Multi-Scale Feature Extraction (MSFE) - e4
 class MSFEe4(nn.Module):
-    def __init__(self, in_ch, mid_ch, out_ch):
+    def __init__(self, in_ch, mid_ch, out_ch, depth=2):
         super(MSFEe4, self).__init__()
         self.input_layer = INCONV(in_ch, out_ch)
 
@@ -462,7 +521,9 @@ class MSFEe4(nn.Module):
         self.en4 = CONV(mid_ch, mid_ch)
 
         # bottleneck
-        self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 6)
+        # self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 6)
+        # self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 4)
+        self.ddense = dilatedDenseBlock(mid_ch, mid_ch, depth)
 
         # decoder
         self.de1 = SPCONV(mid_ch * 2, mid_ch)
@@ -498,7 +559,7 @@ class MSFEe4(nn.Module):
 
 # Multi-Scale Feature Extraction (MSFE) - e3
 class MSFEe3(nn.Module):
-    def __init__(self, in_ch, mid_ch, out_ch):
+    def __init__(self, in_ch, mid_ch, out_ch, depth=2):
         super(MSFEe3, self).__init__()
         self.input_layer = INCONV(in_ch, out_ch)
 
@@ -508,7 +569,9 @@ class MSFEe3(nn.Module):
         self.en3 = CONV(mid_ch, mid_ch)
 
         # bottleneck
-        self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 6)
+        # self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 6)
+        # self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 4)
+        self.ddense = dilatedDenseBlock(mid_ch, mid_ch, depth)
 
         # decoder
         self.de1 = SPCONV(mid_ch * 2, mid_ch)
@@ -541,7 +604,7 @@ class MSFEe3(nn.Module):
 
 # Multi-Scale Feature Extraction (MSFE) - d6  (for decoder part)
 class MSFEd6(nn.Module):
-    def __init__(self, in_ch, mid_ch, out_ch):
+    def __init__(self, in_ch, mid_ch, out_ch, depth=2):
         super(MSFEd6, self).__init__()
         self.input_layer = INCONV(in_ch, out_ch)
 
@@ -554,7 +617,9 @@ class MSFEd6(nn.Module):
         self.en6 = CONV(mid_ch * 2, mid_ch)
 
         # bottleneck
-        self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 6)
+        # self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 6)
+        # self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 4)
+        self.ddense = dilatedDenseBlock(mid_ch, mid_ch, depth)
 
         # decoder
         self.de1 = SPCONV(mid_ch * 2, mid_ch)
@@ -597,7 +662,7 @@ class MSFEd6(nn.Module):
 
 # Multi-Scale Feature Extraction (MSFE) - d5
 class MSFEd5(nn.Module):
-    def __init__(self, in_ch, mid_ch, out_ch):
+    def __init__(self, in_ch, mid_ch, out_ch, depth=2):
         super(MSFEd5, self).__init__()
         self.input_layer = INCONV(in_ch, out_ch)
 
@@ -609,7 +674,7 @@ class MSFEd5(nn.Module):
         self.en5 = CONV(mid_ch * 2, mid_ch)
 
         # bottleneck
-        self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 6)
+        self.ddense = dilatedDenseBlock(mid_ch, mid_ch, depth)
 
         # decoder
         self.de1 = SPCONV(mid_ch * 2, mid_ch)
@@ -649,7 +714,7 @@ class MSFEd5(nn.Module):
 
 # Multi-Scale Feature Extraction (MSFE) - d4
 class MSFEd4(nn.Module):
-    def __init__(self, in_ch, mid_ch, out_ch):
+    def __init__(self, in_ch, mid_ch, out_ch, depth=2):
         super(MSFEd4, self).__init__()
         self.input_layer = INCONV(in_ch, out_ch)
 
@@ -660,7 +725,9 @@ class MSFEd4(nn.Module):
         self.en4 = CONV(mid_ch * 2, mid_ch)
 
         # bottleneck
-        self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 6)
+        # self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 6)
+        # self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 4)
+        self.ddense = dilatedDenseBlock(mid_ch, mid_ch, depth)
 
         # decoder
         self.de1 = SPCONV(mid_ch * 2, mid_ch)
@@ -697,7 +764,7 @@ class MSFEd4(nn.Module):
 
 # Multi-Scale Feature Extraction (MSFE) - d3
 class MSFEd3(nn.Module):
-    def __init__(self, in_ch, mid_ch, out_ch):
+    def __init__(self, in_ch, mid_ch, out_ch, depth=2):
         super(MSFEd3, self).__init__()
         self.input_layer = INCONV(in_ch, out_ch)
 
@@ -707,7 +774,9 @@ class MSFEd3(nn.Module):
         self.en3 = CONV(mid_ch * 2, mid_ch)
 
         # bottleneck
-        self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 6)
+        # self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 6)
+        # self.ddense = dilatedDenseBlock(mid_ch, mid_ch, 4)
+        self.ddense = dilatedDenseBlock(mid_ch, mid_ch, depth)
 
         # decoder
         self.de1 = SPCONV(mid_ch * 2, mid_ch)
@@ -769,7 +838,7 @@ class NUNet_TLS(nn.Module):
         self.down_sampling6 = down_sampling(out_ch)
 
         # Bottleneck block
-        self.DDense = nn.Sequential(dilatedDenseBlock(out_ch, out_ch, 6))
+        self.DDense = nn.Sequential(dilatedDenseBlock(out_ch, out_ch, 2))
 
         # decoder
         self.upsampling1 = upsampling(out_ch * 2)
@@ -809,59 +878,73 @@ class NUNet_TLS(nn.Module):
         hl = hl[..., 1:, :]
         hx = torch.cat([hx, hl], dim=1)
 
-        # input layer
-        hx = self.input_layer(hx)
+        with record_function("1"):
+            # input layer
+            hx = self.input_layer(hx)
 
-        # encoder stage 1
-        hx1, hx1_1, hx1_2, hx1_3, hx1_4, hx1_5, hx1_6 = self.en1(hx)
-        hx1 = self.down_sampling1(hx1)
+        with record_function("en1"):
+            # encoder stage 1
+            hx1, hx1_1, hx1_2, hx1_3, hx1_4, hx1_5, hx1_6 = self.en1(hx)
+            hx1 = self.down_sampling1(hx1)
 
-        # encoder stage 2
-        hx2, hx2_1, hx2_2, hx2_3, hx2_4, hx2_5 = self.en2(hx1)
-        hx2 = self.down_sampling2(hx2)
+        with record_function("en2"):
+            # encoder stage 2
+            hx2, hx2_1, hx2_2, hx2_3, hx2_4, hx2_5 = self.en2(hx1)
+            hx2 = self.down_sampling2(hx2)
 
-        # encoder stage 3
-        hx3, hx3_1, hx3_2, hx3_3, hx3_4 = self.en3(hx2)
-        hx3 = self.down_sampling3(hx3)
+        with record_function("en3"):
+            # encoder stage 3
+            hx3, hx3_1, hx3_2, hx3_3, hx3_4 = self.en3(hx2)
+            hx3 = self.down_sampling3(hx3)
 
-        # encoder stage 4
-        hx4, hx4_1, hx4_2, hx4_3, hx4_4 = self.en4(hx3)
-        hx4 = self.down_sampling4(hx4)
+        with record_function("en4"):
+            # encoder stage 4
+            hx4, hx4_1, hx4_2, hx4_3, hx4_4 = self.en4(hx3)
+            hx4 = self.down_sampling4(hx4)
 
-        # encoder stage 5
-        hx5, hx5_1, hx5_2, hx5_3, hx5_4 = self.en5(hx4)
-        hx5 = self.down_sampling5(hx5)
+        with record_function("en5"):
+            # encoder stage 5
+            hx5, hx5_1, hx5_2, hx5_3, hx5_4 = self.en5(hx4)
+            hx5 = self.down_sampling5(hx5)
 
-        # encoder stage 6
-        hx6, hx6_1, hx6_2, hx6_3 = self.en6(hx5)
-        hx6 = self.down_sampling6(hx6)
+        with record_function("en6"):
+            # encoder stage 6
+            hx6, hx6_1, hx6_2, hx6_3 = self.en6(hx5)
+            hx6 = self.down_sampling6(hx6)
 
-        # dilated dense block
-        out = self.DDense(hx6)
+        with record_function("ddense"):
+            # dilated dense block
+            out = self.DDense(hx6)
 
-        # decoder stage 1
-        out = self.upsampling1(torch.cat([out, hx6], dim=1))
-        out = self.de1(out, hx6_1, hx6_2, hx6_3)
+        with record_function("upsample1"):
+            # decoder stage 1
+            out = self.upsampling1(torch.cat([out, hx6], dim=1))
+            out = self.de1(out, hx6_1, hx6_2, hx6_3)
 
-        # decoder stage 2
-        out = self.upsampling2(torch.cat([out, hx5], dim=1))
-        out = self.de2(out, hx5_1, hx5_2, hx5_3, hx5_4)
+        with record_function("upsample2"):
+            # decoder stage 2
+            out = self.upsampling2(torch.cat([out, hx5], dim=1))
+            out = self.de2(out, hx5_1, hx5_2, hx5_3, hx5_4)
 
-        # decoder stage 3
-        out = self.upsampling3(torch.cat([out, hx4], dim=1))
-        out = self.de3(out, hx4_1, hx4_2, hx4_3, hx4_4)
+        with record_function("upsample3"):
+            # decoder stage 3
+            out = self.upsampling3(torch.cat([out, hx4], dim=1))
+            out = self.de3(out, hx4_1, hx4_2, hx4_3, hx4_4)
 
-        # decoder stage 4
-        out = self.upsampling4(torch.cat([out, hx3], dim=1))
-        out = self.de4(out, hx3_1, hx3_2, hx3_3, hx3_4)
+        with record_function("upsample4"):
+            # decoder stage 4
+            out = self.upsampling4(torch.cat([out, hx3], dim=1))
+            out = self.de4(out, hx3_1, hx3_2, hx3_3, hx3_4)
 
-        # decoder stage 5
-        out = self.upsampling5(torch.cat([out, hx2], dim=1))
-        out = self.de5(out, hx2_1, hx2_2, hx2_3, hx2_4, hx2_5)
+        with record_function("upsample5"):
+            # decoder stage 5
+            out = self.upsampling5(torch.cat([out, hx2], dim=1))
+            out = self.de5(out, hx2_1, hx2_2, hx2_3, hx2_4, hx2_5)
 
-        # decoder stage 6
-        out = self.upsampling6(torch.cat([out, hx1], dim=1))
-        out = self.de6(out, hx1_1, hx1_2, hx1_3, hx1_4, hx1_5, hx1_6)
+        with record_function("upsample7"):
+            # decoder stage 6
+            out = self.upsampling6(torch.cat([out, hx1], dim=1))
+            out = self.de6(out, hx1_1, hx1_2, hx1_3, hx1_4, hx1_5, hx1_6)
 
         # output layer
         out = self.output_layer(out)
@@ -884,10 +967,17 @@ class NUNet_TLS(nn.Module):
 
 
 if __name__ == "__main__":
+    from torch.profiler import profile, record_function, ProfilerActivity
+
     inp = torch.randn(1, 16000)
     lbl = torch.randn(1, 16000)
     hl = torch.randn(1, 6)
     net = NUNet_TLS(2)
-    check_flops(net, inp, hl)
-    loss = net.loss(lbl, inp)
-    print(loss)
+    # with profile(activities=[ProfilerActivity.CPU], profile_memory=True, with_stack=True) as prof:
+    #     net(inp, hl)
+    # print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
+    # check_flops(net, inp, hl)
+    # loss = net.loss(lbl, inp)
+    # print(loss)
+
+    check_profile(net, inp, hl)

@@ -80,6 +80,80 @@ FIG6small:
        - "nearend.wav"
        - "target.wav"
 
+wham:
+  new: "FIG6_v3"
+  train:
+    dirname: '/home/deepnetni/trunk/dns_wdrc/wham_train'
+    pattern: "**/[!.]*_nearend.wav"
+    # across_files: True
+    flist: "wham_tr.csv"
+    nlen: 5.0
+    min_len: 3.0
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+  valid:
+    new: "FIG6"
+    dirname: '/home/deepnetni/trunk/dns_wdrc/dev_vad'
+    pattern: "**/[!.]*_nearend.wav"
+    flist: "fig6_sig_dev_vad.csv"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+  vtest:
+    dirname: '/home/deepnetni/trunk/dns_wdrc/dns_testset_noverb'
+    pattern: "**/[!.]*_nearend.wav"
+    flist: "fig6_sig_dns_test.csv"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+  # valid:
+  #   dirname: '/home/deepnetni/trunk/dns_wdrc/wham_valid'
+  #   flist: "wham_cv.csv"
+  #   pattern: "**/[!.]*_nearend.wav"
+  #   nlen: 5.0
+  #   min_len: 3.0
+  #   keymap:
+  #      - "nearend.wav"
+  #      - "target.wav"
+  # vtest:
+  #   dirname: '/home/deepnetni/trunk/dns_wdrc/wham_test'
+  #   flist: "wham_tt.csv"
+  #   pattern: "**/[!.]*_nearend.wav"
+  #   nlen: 5.0
+  #   min_len: 3.0
+  #   keymap:
+  #      - "nearend.wav"
+  #      - "target.wav"
+
+FIG6Comp:
+  # SIG Challenge Script dataset
+  new: 'FIG6'
+  train:
+    dirname: '/home/deepnetni/trunk/dns_wdrc/train_100'
+    flist: "fig6_sig_train_100.csv"
+    pattern: '[!.]*_nearend.wav'
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+    nlen: 5.0
+    min_len: 1.0
+    return_clean: True
+  valid:
+    dirname: '/home/deepnetni/trunk/dns_wdrc/dev_vad'
+    pattern: "**/[!.]*_nearend.wav"
+    flist: "fig6_sig_dev_vad.csv"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+  vtest:
+    dirname: '/home/deepnetni/trunk/dns_wdrc/dns_testset_noverb'
+    pattern: "**/[!.]*_nearend.wav"
+    flist: "fig6_sig_dns_test.csv"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
+
 FIG6smallVad:
   # SIG Challenge Script dataset
   train:

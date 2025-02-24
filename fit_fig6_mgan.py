@@ -128,8 +128,8 @@ def overrides(conf, args):
 
     conf["config"]["name"] = value(args.name, conf["config"]["name"])
     conf["config"]["epochs"] = value(args.epoch, conf["config"]["epochs"])
-    if args.small:
-        conf["config"]["info_dir"] = conf["config"]["info_dir"] + "_small"
+    if args.dset:
+        conf["config"]["info_dir"] = conf["config"]["info_dir"] + "_" + args.dset
 
     return conf
 

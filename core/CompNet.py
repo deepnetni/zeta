@@ -9,7 +9,7 @@ from einops.layers.torch import Rearrange
 from torch import Tensor
 from torch.autograd import Variable
 
-from core.JointNSHModel import HLModule
+from JointNSHModel import HLModule
 from utils.check_flops import check_flops
 from utils.register import tables
 
@@ -393,7 +393,7 @@ class FrameUNetEncoder(nn.Module):
         self.norm_type = norm_type
         stride = (1, 2)
         global frame_encoder_list
-        c_final = 16  # 64
+        c_final = 32  # 64
         unet = []
         unet.append(
             nn.Sequential(
@@ -467,7 +467,7 @@ class FrameUNetDecoder(nn.Module):
         self.embed_dim = embed_dim
         self.inter_connect = inter_connect
         self.norm_type = norm_type
-        c_begin = 16  # 64
+        c_begin = 32  # 64
         stride = (1, 2)
         global frame_decoder_list
         unet = []
@@ -680,7 +680,7 @@ class FreqU2NetEncoder(nn.Module):
         self.c = c
         self.intra_connect = intra_connect
         self.norm_type = norm_type
-        c_last = 16  # 64
+        c_last = 32  # 64
         kernel_begin = (k1[0], 5)
         stride = (1, 2)
         global frequency_encoder_list
@@ -1903,12 +1903,12 @@ if __name__ == "__main__":
         fft_num=512,
         # k1=(2, 3),
         # k2=(2, 3),
-        c=32,
-        embed_dim=32,
+        # c=32,
+        # embed_dim=32,
         # kd1=5,
         # cd1=64,
-        d_feat=128,
-        hidden_dim=48,
+        # d_feat=128,
+        # hidden_dim=48,
         # hidden_num=2,
         # group_num=2,
         # dilations=(1, 2, 5, 9),

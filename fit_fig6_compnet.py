@@ -41,8 +41,8 @@ class Eng_conf:
     train_num_workers: int = 16
     valid_batch_sz: int = 10
     valid_num_workers: int = 16
-    vtest_batch_sz: int = 6
-    vtest_num_workers: int = 16
+    vtest_batch_sz: int = 4
+    vtest_num_workers: int = 8
 
 
 @dataclass
@@ -52,11 +52,11 @@ class Model_conf:
     fft_num: int = 512
     k1: Union[Tuple, List] = (2, 3)
     k2: Union[Tuple, List] = (2, 3)
-    c: int = 48
-    embed_dim: int = 48
+    c: int = 64
+    embed_dim: int = 64
     kd1: int = 5
     cd1: int = 64
-    d_feat: int = 128
+    d_feat: int = 256
     hidden_dim: int = 64
     hidden_num: int = 2
     group_num: int = 2

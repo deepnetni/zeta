@@ -629,6 +629,7 @@ class HLModule(nn.Module):
 
         k, b = self._HL_LinearFitting(hl)  # b,nbands(16)
         hl_ext = k[:, self.HL_curve] * self.delta_x + b[:, self.HL_curve]
+        # print(k.shape, b.shape, hl_ext.shape, self.HL_curve.shape)
 
         expand_ht = hl_ext.unsqueeze(1).unsqueeze(1).repeat(1, 1, T, 1)  # b,1,nbands
 
@@ -1519,9 +1520,12 @@ if __name__ == "__main__":
     # plt.plot(freqs.numpy(), out.numpy() * 100)
     # plt.savefig("test.svg")
 
-    # net = Baseline(512, 256)
+    # net = Baseline(512, 256, 48, 2)
     # net = BaselineLinear(512, 256, 48, 2)
-
+    # net = BaselineVAD(512, 256, 48, 2)
+    # net = BaselineConditionalConformerVAD(512, 256, 48, 2)
+    # net = BaselineConditionalConformerIter(512, 256, 48, 2)
+    net = BaselineConditionalConformer(512, 256, 48, 2)
     # inp = torch.randn(2, 2, 10, 257)
     # l = HLModule()
     # l(inp, hl)
@@ -1529,10 +1533,9 @@ if __name__ == "__main__":
     # net = BaselineHLCodec(512, 256, 48, 2)
     # net = BaselineGumbelCodebook(512, 256, 48, 2)
     # net = BaselineXkConditionalConformer(512, 256, 48, 2)
-    net = BaselineConditionalConformer(512, 256, 48, 2)
+    # net = BaselineConditionalConformer(512, 256, 48, 2)
     # net = DiTConformer(512, 256, 48, 2)
-    # net = BaselineVAD(512, 256, 48, 2)
     out = net(inp, hl)
-    print(out.shape)
+    # print(out.shape)
 
     check_flops(net, inp, hl)

@@ -1597,23 +1597,26 @@ class MGAN_G_VAD(nn.Module):
 
 
 if __name__ == "__main__":
-    inputs = torch.randn(2, 16000)
+    inputs = torch.randn(1, 16000)
     # inputs_ht = torch.randn(1, 1, 100, 257)
-    inputs_ht = torch.tensor([[2, 4, 8, 16, 32, 64], [1, 2, 3, 4, 5, 6]])
+    inputs_ht = torch.tensor([[2, 4, 8, 16, 32, 64]])
 
     # net = MGAN_G(512, 256)
-    net = MGAN_G_VAD(512, 256)
+    # net = MGAN_G_L(512, 256)
+    net = MGAN_G_BVAD(512, 256)
+    # net = MGAN_G_COND_ITER(512, 256)
     # net = MGAN_G_COND(512, 256)
-
+    # net = MGAN_G_VAD(512, 256)
+    #
     # out = net.expand_ht(inputs_ht, 10)
-    out, _ = net(inputs, inputs_ht)
-    print(out.shape)
+    # out = net(inputs, inputs_ht)
+    # print(out.shape)
 
-    net = Discriminator(16)
-    out = net(inputs, inputs, inputs_ht)
-    print(out.shape)
+    # net = Discriminator(16)
+    # out = net(inputs, inputs, inputs_ht)
+    # print(out.shape)
 
-    # check_flops(Model, inputs, inputs_ht)
+    check_flops(net, inputs, inputs_ht)
 
     # params_of_network = 0
     # for param in Model.parameters():

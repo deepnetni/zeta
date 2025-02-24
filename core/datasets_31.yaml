@@ -201,21 +201,30 @@ FIG6smallVad:
     vad: True
 
 wham:
-  new: "basic"
+  new: "FIG6_v3"
   train:
-    dirname: '/home/deepni/disk/wham/generated/wav16k/max/tr/mix_both'
-    clean_dirname: '/home/deepni/disk/wham/generated/wav16k/max/tr/mix_clean'
+    dirname: '/home/deepni/datasets/dns_wdrc/wham_train'
+    pattern: "**/[!.]*_nearend.wav"
     across_file: True
     flist: "wham_tr.csv"
     nlen: 5.0
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
   valid:
-    dirname: '/home/deepni/disk/wham/generated/wav16k/max/cv/mix_both'
-    clean_dirname: '/home/deepni/disk/wham/generated/wav16k/max/cv/mix_clean'
+    dirname: '/home/deepni/datasets/dns_wdrc/wham_valid'
     flist: "wham_cv.csv"
+    pattern: "**/[!.]*_nearend.wav"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
   vtest:
-    dirname: '/home/deepni/disk/wham/generated/wav16k/max/tt/mix_both'
-    clean_dirname: '/home/deepni/disk/wham/generated/wav16k/max/tt/mix_clean'
+    dirname: '/home/deepnetni/trunk/dns_wdrc/wham_test'
     flist: "wham_tt.csv"
+    pattern: "**/[!.]*_nearend.wav"
+    keymap:
+       - "nearend.wav"
+       - "target.wav"
 
 ########### Multi-channel NS tasks ############
 l3das22:
