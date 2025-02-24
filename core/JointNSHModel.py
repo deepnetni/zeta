@@ -1532,9 +1532,10 @@ if __name__ == "__main__":
 
     # net = BaselineHLCodec(512, 256, 48, 2)
     # net = BaselineGumbelCodebook(512, 256, 48, 2)
-    # net = BaselineXkConditionalConformer(512, 256, 48, 2)
+    net = BaselineXkConditionalConformer(512, 256, 48, 2)
     # net = BaselineConditionalConformer(512, 256, 48, 2)
     # net = DiTConformer(512, 256, 48, 2)
+    # net = BaselineVAD(512, 256, 48, 2)
     out = net(inp, hl)
     # print(out.shape)
 

@@ -24,6 +24,8 @@ from core.utils.audiolib import audioread, audiowrite
 from core.utils.ini_opts import read_ini
 from core.utils.logger import cprint
 from core.utils.register import tables
+from core.rebuild.FTCRN import *
+
 
 warnings.filterwarnings("ignore", category=UserWarning, module="torch")
 from core.fig6_baselines import *
@@ -61,6 +63,12 @@ class Model_conf:
     nhop: int = 256
     mid_channel: int = 48  # 48, 36
     conformer_num: int = 2  # 2
+
+
+@dataclass
+class FTCRN_conf:
+    nframe: int = 512
+    nhop: int = 256
 
 
 @dataclass
