@@ -26,7 +26,7 @@ FIG6:
        - "target.wav"
 
 FIG6Vad:
-  # SIG Challenge Script dataset
+  new: "FIG6"
   train:
     dirname: '/home/deepnetni/trunk/dns_wdrc/train_100'
     flist: "fig6_sig_train_100.csv"
