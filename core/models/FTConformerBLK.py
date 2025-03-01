@@ -446,6 +446,7 @@ class ConditionalFTConformer(nn.Module):
 
         x_f = einops.rearrange(x, "b c t f->(b t) f c")
 
+        # bt,f,c * bt,f,c + bt,f,c
         x_ = self.modulate_f(self.norm1_f(x_f), shift_msa_f, scale_msa_f)
         x_, attn_f = self.freq_conformer(x_)
         x_f = x_ * gate_msa_f + x_f

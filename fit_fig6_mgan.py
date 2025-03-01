@@ -32,6 +32,8 @@ from core.fig6_baselines import *
 from core.JointNSHModel import *
 import core.NUNet_TLS
 import core.DCCRN
+import core.CRN
+import core.aia_trans_official
 
 
 @dataclass
@@ -49,7 +51,7 @@ class Eng_conf:
     vtest_outdir: str = "vtest"
     dsets_raw_metrics: str = "dset_metrics.json"
 
-    train_batch_sz: int = 10  # 6(48), 10 for ftcrn
+    train_batch_sz: int = 2  # 6(48), 10 for ftcrn
     train_num_workers: int = 16
     valid_batch_sz: int = 12  # 12
     valid_num_workers: int = 16
@@ -191,6 +193,7 @@ if __name__ == "__main__":
     elif md_name in [
         "baseline_fig6_vad",
         "condConformerVAD",
+        "condConformerVAD8",
         "FTCRN_VAD",
         "FTCRN_BASE_VAD",
     ]:
