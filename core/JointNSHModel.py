@@ -1800,7 +1800,7 @@ if __name__ == "__main__":
     # net = Baseline(512, 256, 48, 2)
     # net = BaselineLinear(512, 256, 48, 2)
     # net = BaselineVAD(512, 256, 48, 2)
-    net = BaselineConditionalConformerVAD8(512, 256, 48, 2)
+    net = BaselineConditionalConformerVAD8(512, 256, 60, 2)
     # net = BaselineConditionalConformerIter(512, 256, 48, 2)
     # net = BaselineConditionalConformer(512, 256, 48, 2)
     # inp = torch.randn(2, 2, 10, 257)

@@ -1130,6 +1130,60 @@ class TrainerHAMGAN(Trainer):
         return enh, loss, loss_dict
 
 
+class TrainerMGAN(Trainer):
+    def __init__(
+        self,
+        train_dset: Dataset,
+        valid_dset: Dataset,
+        vtest_dset: Dataset,
+        train_batch_sz: int,
+        vpred_dset: Dataset | None = None,
+        **kwargs,
+    ):
+        super().__init__(train_dset, valid_dset, vtest_dset, train_batch_sz, vpred_dset, **kwargs)
+
+    def loss_fn(self, clean: Tensor, enh: Tensor):
+        specs_sph = self.stft.transform(clean)
+        specs_enh = self.stft.transform(enh)  # B,2,T,F
+
+        mag_enh = specs_enh.pow(2).sum(1).sqrt()
+        mag_lbl = specs_sph.pow(2).sum(1).sqrt()
+
+        mag_lv = F.mse_loss(mag_enh, mag_lbl)
+        ri_lv = F.mse_loss(specs_enh, specs_sph)
+        loss = 0.7 * mag_lv + 0.3 * ri_lv
+
+        loss_dict = {
+            "loss": loss,
+            "mag_lv": 0.7 * mag_lv.detach(),
+            "ri_lv": 0.3 * ri_lv.detach(),
+        }
+
+        return loss_dict
+
+    def _fit_generator_step(self, *inputs, sph, one_labels):
+        """each training step in epoch, revised it if model has different output formats.
+
+        :param sph:
+        :param one_labels:
+        :returns:
+
+        """
+        mic, HL = inputs
+        enh = self.net(mic, HL)  # B,T
+        sph = sph[..., : enh.size(-1)]
+        # loss_dict = self.loss_fn_apc_denoise(sph, enh)
+        loss_dict = self.loss_fn(sph, enh)
+
+        time_lv = torch.abs(enh - sph).mean()
+        fake_metric = self.net_D(sph, enh, HL)
+        loss_GAN = F.mse_loss(fake_metric.flatten(), one_labels)
+        loss = loss_dict["loss"] + loss_GAN + time_lv
+        loss_dict.update({"loss_G": loss_GAN.detach(), "time_lv": time_lv.detach()})
+
+        return enh, loss, loss_dict
+
+
 class TrainerCompNetGAN(Trainer):
     def __init__(
         self,

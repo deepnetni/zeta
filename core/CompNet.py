@@ -1847,6 +1847,7 @@ class CompNetFIG6(nn.Module):
             return_complex=True,
         )
         stft_inpt = torch.view_as_real(stft_inpt)
+
         #### NOTE stage 1
         esti_x = self.pre_seperate(frame_inpt)
 
@@ -1863,18 +1864,16 @@ class CompNetFIG6(nn.Module):
         p = 0.5 if self.is_mu_compress else 1.0
 
         # B,T,F
-        esti_mag, esti_phase = ((torch.norm(esti_stft, dim=-1) + torch_eps) ** p).transpose(
-            -2, -1
-        ), torch.atan2(esti_stft[..., -1], esti_stft[..., 0]).transpose(-2, -1)
-        mix_mag, mix_phase = ((torch.norm(stft_inpt, dim=-1) + torch_eps) ** p).transpose(
-            -2, -1
-        ), torch.atan2(stft_inpt[..., -1], stft_inpt[..., 0]).transpose(-2, -1)
+        esti_mag = ((torch.norm(esti_stft, dim=-1) + torch_eps) ** p).transpose(-2, -1)
+        esti_phase = torch.atan2(esti_stft[..., -1], esti_stft[..., 0]).transpose(-2, -1)
+        inp_mag = ((torch.norm(stft_inpt, dim=-1) + torch_eps) ** p).transpose(-2, -1)
+        inp_phase = torch.atan2(stft_inpt[..., -1], stft_inpt[..., 0]).transpose(-2, -1)
 
         comp_phase = torch.stack(
-            (mix_mag * torch.cos(esti_phase), mix_mag * torch.sin(esti_phase)), dim=1
+            (inp_mag * torch.cos(esti_phase), inp_mag * torch.sin(esti_phase)), dim=1
         )
         comp_mag = torch.stack(
-            (esti_mag * torch.cos(mix_phase), esti_mag * torch.sin(mix_phase)), dim=1
+            (esti_mag * torch.cos(inp_phase), esti_mag * torch.sin(inp_phase)), dim=1
         )
         nT = comp_mag.size(-2)
         hl_b = hl_b.repeat(1, 1, nT, 1)

@@ -1,8 +1,11 @@
 import torch
 import torch.nn as nn
-from models.conformer import ConformerBlock
 
+from JointNSHModel import expand_HT
+from models.conformer import ConformerBlock
+from models.conv_stft import STFT
 from utils.check_flops import check_flops
+from utils.register import tables
 
 
 class DilatedDenseNet(nn.Module):
@@ -163,6 +166,7 @@ class ComplexDecoder(nn.Module):
         return x
 
 
+@tables.register("models", "CMGAN")
 class TSCNet(nn.Module):
     def __init__(self, num_channel=64, num_features=201):
         super(TSCNet, self).__init__()
@@ -199,9 +203,58 @@ class TSCNet(nn.Module):
         return final_real, final_imag
 
 
-if __name__ == "__main__":
-    net = TSCNet()
-    inp = torch.randn(1, 2, 10, 201)
-    out = net(inp)
+@tables.register("models", "CMGAN_FIG6")
+class TSCNetFIG6(nn.Module):
+    def __init__(self, num_channel=48):
+        super(TSCNetFIG6, self).__init__()
+        self.stft = STFT(512, 256, 512)
+        self.reso = 16000 / 512
 
-    check_flops(net, inp)
+        self.dense_encoder = DenseEncoder(in_channel=4, channels=num_channel)
+
+        self.TSCB_1 = TSCB(num_channel=num_channel)
+        self.TSCB_2 = TSCB(num_channel=num_channel)
+        self.TSCB_3 = TSCB(num_channel=num_channel)
+        self.TSCB_4 = TSCB(num_channel=num_channel)
+
+        self.mask_decoder = MaskDecoder(257, num_channel=num_channel, out_channel=1)
+        self.complex_decoder = ComplexDecoder(num_channel=num_channel)
+
+    def forward(self, inp, HL):
+        x = self.stft.transform(inp)  # b,c,t,f
+        hl = expand_HT(HL, x.shape[-2], self.reso)  # B,C(1),T,F
+        mag = torch.sqrt(x[:, 0, :, :] ** 2 + x[:, 1, :, :] ** 2).unsqueeze(1)
+        noisy_phase = torch.angle(torch.complex(x[:, 0, :, :], x[:, 1, :, :])).unsqueeze(1)
+        x_in = torch.cat([mag, x, hl], dim=1)
+
+        out_1 = self.dense_encoder(x_in)
+        out_2 = self.TSCB_1(out_1)
+        out_3 = self.TSCB_2(out_2)
+        # out_4 = self.TSCB_3(out_3)
+        # out_5 = self.TSCB_4(out_4)
+
+        mask = self.mask_decoder(out_3)
+        out_mag = mask * mag
+
+        complex_out = self.complex_decoder(out_3)
+        mag_real = out_mag * torch.cos(noisy_phase)
+        mag_imag = out_mag * torch.sin(noisy_phase)
+        final_real = mag_real + complex_out[:, 0, :, :].unsqueeze(1)
+        final_imag = mag_imag + complex_out[:, 1, :, :].unsqueeze(1)
+
+        out_spec = torch.concat([final_real, final_imag], dim=1)
+        out = self.stft.inverse(out_spec)
+
+        return out
+
+
+if __name__ == "__main__":
+    # net = TSCNet()
+    # inp = torch.randn(1, 2, 10, 201)
+    inp = torch.randn(1, 16000)
+    hl = torch.randn(1, 6)
+    net = TSCNetFIG6()
+    out = net(inp, hl)
+    print(out.shape)
+
+    check_flops(net, inp, hl)

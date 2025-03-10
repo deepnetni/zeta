@@ -16,6 +16,7 @@ from core.Trainer_wGAN_for_fig6 import (
     Trainer,
     TrainerGumbelCodebook,
     TrainerHAMGAN,
+    TrainerMGAN,
     TrainerMultiOutputs,
     TrainerforBaselines,
     TrainerforMPSENET,
@@ -36,6 +37,7 @@ import core.DCCRN
 import core.CRN
 import core.aia_trans_official
 import core.MP_SENet
+import core.cmgan_generator
 
 
 @dataclass
@@ -53,9 +55,10 @@ class Eng_conf:
     vtest_outdir: str = "vtest"
     dsets_raw_metrics: str = "dset_metrics.json"
 
-    train_batch_sz: int = 12  # 6(48), 10 for ftcrn, 16
+    train_batch_sz: int = 5  # 6(48), 10 for ftcrn, 12
     train_num_workers: int = 16
     valid_batch_sz: int = 12  # 12
+
     valid_num_workers: int = 16
     vtest_batch_sz: int = 8  # 12
     vtest_num_workers: int = 16
@@ -194,6 +197,8 @@ if __name__ == "__main__":
         Trainer = Trainer
     elif md_name == "GumbelCodebook":
         Trainer = TrainerGumbelCodebook
+    elif md_name == "CMGAN_FIG6":
+        Trainer = TrainerMGAN
     elif md_name in [
         "baseline_fig6_vad",
         "condConformerVAD",
