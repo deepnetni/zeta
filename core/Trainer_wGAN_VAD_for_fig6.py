@@ -13,7 +13,9 @@ from torchmetrics.functional.audio.sdr import signal_distortion_ratio as SDR
 from tqdm import tqdm
 
 from Trainer_wGAN_for_fig6 import Trainer
+from utils.check_flops import check_flops
 from utils.focal_loss import BCEFocalLoss
+from utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation_vad
 from utils.HAids.PyHASQI.preset_parameters import generate_filter_params
 from utils.losses import loss_pmsqe
 from utils.record import REC
@@ -265,3 +267,123 @@ class TrainerVAD(Trainer):
                 dirn[k] = v
         out[dirname] = dirn
         return out
+
+
+class TrainerSEVAD(TrainerVAD):
+    def __init__(
+        self,
+        train_dset: Dataset,
+        valid_dset: Dataset,
+        vtest_dset: Dataset,
+        train_batch_sz: int,
+        vpred_dset: Optional[Dataset] = None,
+        **kwargs,
+    ):
+        super().__init__(train_dset, valid_dset, vtest_dset, train_batch_sz, vpred_dset, **kwargs)
+
+    def _predict_step(self, *inputs) -> Tensor:
+        mic, _ = inputs
+        with torch.no_grad():
+            enh, _ = self.net(mic)
+
+        return enh
+
+    def _fit_each_epoch(self, epoch):
+        losses_rec = REC()
+
+        pbar = tqdm(
+            self.train_loader,
+            ncols=160,
+            leave=True,
+            desc=f"Epoch-{epoch}/{self.epochs}",
+        )
+
+        generate_filter_params(119808)
+        # skip_count = 0
+        for mic, lbl, cln, HL in pbar:
+            mic = mic.to(self.device)  # B,T
+            sph, lbl_vad = lbl[..., 0], lbl[..., 1]
+            cln = cln.to(self.device)  # B,T
+            HL = HL.to(self.device)  # B,6
+            lbl_vad = lbl_vad.to(self.device)  # B,6
+
+            ###################
+            # Train Generator #
+            ###################
+            self.optimizer.zero_grad()
+
+            enh, loss, loss_dict = self._fit_generator_step(
+                mic, HL, sph=sph, cln=cln, lbl_vad=lbl_vad
+            )
+
+            loss.backward()
+            # torch.nn.utils.clip_grad_norm_(self.net.parameters(), 5.0)
+            # has_nan_inf = 0
+            # for params in self.net.parameters():
+            #     if params.requires_grad:
+            #         has_nan_inf += torch.sum(torch.isnan(params.grad))
+            #         has_nan_inf += torch.sum(torch.isinf(params.grad))
+            # if has_nan_inf == 0:
+            #     self.optimizer.step()
+            # else:
+            #     skip_count += 1
+            self.optimizer.step()
+            losses_rec.update(loss_dict)
+
+            # pbar.set_postfix(**losses_rec.state_dict())
+            show_state = losses_rec.state_dict()
+            # show_state.update({"c": skip_count})
+            pbar.set_postfix(**show_state)
+
+        return losses_rec.state_dict()
+
+    def _fit_generator_step(self, *inputs, sph, cln, lbl_vad):
+        mic, HL = inputs
+        enh, est_vad = self.net(mic)  # B,T
+        # sph = sph[..., : enh.size(-1)]
+        cln = cln[..., : enh.size(-1)]
+
+        lbl_vad = vad_to_frames(lbl_vad, 512, 256)  # B,T,1
+        vad_lv = self.focal(lbl_vad, est_vad)
+
+        loss_dict = self.loss_fn(cln, enh)
+
+        loss = loss_dict["loss"] + vad_lv
+        loss_dict.update({"vad_lv": vad_lv.detach()})
+
+        return enh, loss, loss_dict
+
+    def _valid_step(self, *inps, sph, lbl_vad, nlen) -> Tuple[Tensor, Dict]:
+        mic, HL = inps
+        with torch.no_grad():
+            enh, est_vad = self.net(mic)  # B,T,M
+
+        with Parallel(n_jobs=8) as parallel:
+            fig6_out = parallel(
+                delayed(FIG6_compensation_vad)(hl, e, self.fs, 128, 64)
+                for e, hl in zip(enh.cpu().numpy(), HL.cpu().numpy())
+            )
+        enh_fig6 = torch.from_numpy(np.array(fig6_out)).to(enh.device)
+        N = enh_fig6.shape[-1]
+
+        metric_dict = self.valid_fn(sph[:, :N], enh_fig6, torch.full_like(nlen, N))
+        lbl_vad = vad_to_frames(lbl_vad, 512, 256)  # B,T,1
+        vad_lv = self.focal(lbl_vad, est_vad)
+
+        hasqi_score = self.batch_hasqi_score(sph, enh_fig6, HL)
+        if hasqi_score is not None:
+            hasqi_score = hasqi_score.mean()
+        else:
+            hasqi_score = torch.tensor(0.0)
+
+        metric_dict.update({"HASQI": hasqi_score, "vad_lv": vad_lv})
+
+        return enh, metric_dict
+
+    def _net_flops(self) -> int:
+        import copy
+
+        x = torch.randn(1, 16000)
+
+        flops, params = check_flops(copy.deepcopy(self.net).cpu(), x)
+        return flops

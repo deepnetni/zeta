@@ -1,0 +1,8 @@
+md_name: MP_SENet
+model_conf:
+  n_fft:  512
+  hop_size: 256
+  win_size: 512
+  beta: 2.0
+  dense_channel: 48
+  num_tsblocks: 4

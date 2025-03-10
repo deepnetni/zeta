@@ -1164,11 +1164,13 @@ class TrainerCompNetGAN(Trainer):
         sph_spec = torch.stack([sph_xk.real, sph_xk.imag], dim=1).permute(0, 1, 3, 2)  # B,2,T,F
 
         esti_wav, esti_mag, post_spec = model_output
-        sisnr_lv = loss_sisnr(cln, esti_wav)
+        # sisnr_lv = loss_sisnr(cln, esti_wav)
         # sc_loss, mag_loss = self.ms_stft_loss(esti_wav, cln)
         # stft_lv = sc_loss + mag_loss  # + 0.3 * pmsqe_score  # + 0.25 * pase_loss
+        post_mag = post_spec.pow(2).sum(1).sqrt() ** 0.5
 
-        mag_lv = self.mag_loss_fn(esti_mag, sph_mag)
+        # mag_lv = self.mag_loss_fn(esti_mag, sph_mag)
+        mag_lv = self.mag_loss_fn(post_mag, sph_mag)
         com_mag_lv = self.com_mag_loss_fn(post_spec, sph_spec)
 
         loss = com_mag_lv + 0.5 * mag_lv  # + 0.2 * sisnr_lv
@@ -1458,3 +1460,40 @@ class TrainerMC(Trainer):
             ),
         }
         return supported[name](optimizer)
+
+
+class TrainerforMPSENET(Trainer):
+    def __init__(
+        self,
+        train_dset: Dataset,
+        valid_dset: Dataset,
+        vtest_dset: Dataset,
+        train_batch_sz: int,
+        vpred_dset: Optional[Dataset] = None,
+        **kwargs,
+    ):
+        super().__init__(train_dset, valid_dset, vtest_dset, train_batch_sz, vpred_dset, **kwargs)
+
+    def _fit_generator_step(self, *inputs, sph, one_labels):
+        """each training step in epoch, revised it if model has different output formats.
+
+        :param sph:
+        :param one_labels:
+        :returns:
+
+        """
+        mic, HL = inputs
+        enh = self.net(mic, HL)  # B,T
+        sph = sph[..., : enh.size(-1)]
+        # loss_dict = self.loss_fn_apc_denoise(sph, enh)
+        # loss_dict = self.loss_fn(sph, enh)
+        assert callable(self.net.loss)
+        loss_dict = self.net.loss(sph, enh)
+        loss = loss_dict["loss"]
+
+        fake_metric = self.net_D(sph, enh, HL)
+        loss_GAN = F.mse_loss(fake_metric.flatten(), one_labels)
+        loss = loss_dict["loss"] + 0.05 * loss_GAN
+        loss_dict.update({"loss_G": 0.05 * loss_GAN.detach()})
+
+        return loss, loss_dict

@@ -245,29 +245,28 @@ def FIG6_compensation(HL, inp, fs=16000, nframe=128, nhop=64, SPL_off=None):
         [HL[0], *HL]
     )  # hearing threshold corresponding to each feature points dB
 
-    if HL_Flag == 1:
-        # determine the attenuation vector according to the degree of HL value.
-        if HL_avg > 20 and HL_avg <= 40:
-            Hearing_Loss = np.array([0, 0, 0, 0, -10, -20, 0])
-        elif HL_avg > 40 and HL_avg <= 60:
-            Hearing_Loss = np.array([0, 0, -10, -10, -20, -30, -10])
-        elif HL_avg > 60:
-            Hearing_Loss = np.array([0, 0, -10, -20, -30, -40, -30])
-        else:
-            Hearing_Loss = np.zeros(7)
+    # if HL_Flag == 1:
+    #     # determine the attenuation vector according to the degree of HL value.
+    #     if HL_avg > 20 and HL_avg <= 40:
+    #         Hearing_Loss = np.array([0, 0, 0, 0, -10, -20, 0])
+    #     elif HL_avg > 40 and HL_avg <= 60:
+    #         Hearing_Loss = np.array([0, 0, -10, -10, -20, -30, -10])
+    #     elif HL_avg > 60:
+    #         Hearing_Loss = np.array([0, 0, -10, -20, -30, -40, -30])
+    #     else:
+    #         Hearing_Loss = np.zeros(7)
 
-        Hearing_Loss = 10.0 ** (Hearing_Loss / 10)
-        idx = audiogram_f / fstep  # ignore the 0-th point
-        interp = interp1d(idx, Hearing_Loss)
-        HL_ext = interp(np.arange(1, nbin))
-        HL_ext = np.nan_to_num(HL_ext, nan=0.0)
+    #     Hearing_Loss = 10.0 ** (Hearing_Loss / 10)
+    #     idx = audiogram_f / fstep  # ignore the 0-th point
+    #     interp = interp1d(idx, Hearing_Loss)
+    #     HL_ext = interp(np.arange(1, nbin))
+    #     HL_ext = np.nan_to_num(HL_ext, nan=0.0)
 
-        # TODO check, process the 0-th component
-        HL_ext = np.array([1, *HL_ext])  # 65
-    else:  # HL_Flag == 0
-        HL_ext = np.ones(nbin)  # 65,
-
-    HL_ext = HL_ext[None, ...]
+    #     # TODO check, process the 0-th component
+    #     HL_ext = np.array([1, *HL_ext])  # 65
+    # else:  # HL_Flag == 0
+    #     HL_ext = np.ones(nbin)  # 65,
+    # HL_ext = HL_ext[None, ...]
 
     # C,3
     kn, bn = fig6_curve(audiogram_f, audiogram_ht, ChannelNum_fc)

@@ -1,0 +1,8 @@
+md_name: JointNSCompensation
+nframe: 512
+nhop: 256
+fs: 16000
+
+epoch: 25
+lr: 5e-4
+batch_size: 15

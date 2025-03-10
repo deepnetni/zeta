@@ -1,10 +1,69 @@
+from dataclasses import asdict, dataclass, field
+
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from joblib import Parallel, delayed
 from pesq import pesq
 
+from JointNSHModel import expand_HT
+from models.conv_stft import STFT
 from models.transformer import TransformerBlock
+from utils.check_flops import check_flops
+from utils.register import tables
+
+
+@dataclass
+class h_dict:
+    n_fft: int = 512
+    hop_size: int = 256
+    win_size: int = 512
+    beta: float = 2.0
+    dense_channel: int = 48
+
+
+def phase_losses(phase_r, phase_g):
+    """
+    B,F,T
+    """
+    ip_loss = torch.mean(anti_wrapping_function(phase_r - phase_g))
+    gd_loss = torch.mean(
+        anti_wrapping_function(torch.diff(phase_r, dim=1) - torch.diff(phase_g, dim=1))
+    )
+    iaf_loss = torch.mean(
+        anti_wrapping_function(torch.diff(phase_r, dim=2) - torch.diff(phase_g, dim=2))
+    )
+
+    phase_loss = ip_loss + gd_loss + iaf_loss
+    return phase_loss, dict(
+        ip_loss=ip_loss.detach(), gd_loss=gd_loss.detach(), iaf_loss=iaf_loss.detach()
+    )
+
+
+def anti_wrapping_function(x):
+    return torch.abs(x - torch.round(x / (2 * np.pi)) * 2 * np.pi)
+
+
+def pesq_score(utts_r, utts_g, h):
+    pesq_score = Parallel(n_jobs=30)(
+        delayed(eval_pesq)(
+            utts_r[i].squeeze().cpu().numpy(), utts_g[i].squeeze().cpu().numpy(), h.sampling_rate
+        )
+        for i in range(len(utts_r))
+    )
+    pesq_score = np.mean(pesq_score)
+
+    return pesq_score
+
+
+def eval_pesq(clean_utt, esti_utt, sr):
+    try:
+        pesq_score = pesq(sr, clean_utt, esti_utt)
+    except:
+        pesq_score = -1
+
+    return pesq_score
 
 
 class LearnableSigmoid2d(nn.Module):
@@ -176,41 +235,116 @@ class MPNet(nn.Module):
         return denoised_amp, denoised_pha, denoised_com
 
 
-def phase_losses(phase_r, phase_g):
-    ip_loss = torch.mean(anti_wrapping_function(phase_r - phase_g))
-    gd_loss = torch.mean(
-        anti_wrapping_function(torch.diff(phase_r, dim=1) - torch.diff(phase_g, dim=1))
-    )
-    iaf_loss = torch.mean(
-        anti_wrapping_function(torch.diff(phase_r, dim=2) - torch.diff(phase_g, dim=2))
-    )
+@tables.register("models", "MP_SENet")
+class MPNetT(nn.Module):
+    def __init__(self, h, num_tsblocks=4):
+        super().__init__()
+        self.h = h
+        self.num_tscblocks = num_tsblocks
+        self.dense_encoder = DenseEncoder(h, in_channel=2)
 
-    phase_loss = ip_loss + gd_loss + iaf_loss
-    return phase_loss, dict(
-        ip_loss=ip_loss.detach(), gd_loss=gd_loss.detach(), iaf_loss=iaf_loss.detach()
-    )
+        self.TSTransformer = nn.ModuleList([])
+        for i in range(num_tsblocks):
+            self.TSTransformer.append(TSTransformerBlock(h))
+
+        self.mask_decoder = MaskDecoder(h, out_channel=1)
+        self.phase_decoder = PhaseDecoder(h, out_channel=1)
+
+        self.stft = STFT(h.win_size, h.hop_size)
+
+    def forward(self, inp):  # [B, F, T]
+        x = self.stft.transform(inp)
+        # x = torch.stack((noisy_amp, noisy_pha), dim=-1).permute(0, 3, 2, 1)  # [B, 2, T, F]
+        noisy_amp = x.pow(2).sum(1).sqrt().permute(0, 2, 1)  # B,F,T
+        x = self.dense_encoder(x)
+
+        for i in range(self.num_tscblocks):
+            x = self.TSTransformer[i](x)
+
+        denoised_amp = noisy_amp * self.mask_decoder(x)
+        denoised_pha = self.phase_decoder(x)
+        denoised_com = torch.stack(
+            (denoised_amp * torch.cos(denoised_pha), denoised_amp * torch.sin(denoised_pha)), dim=-1
+        )  # b,f,t,2
+        out = self.stft.inverse(denoised_com.permute(0, 3, 2, 1))
+
+        return out, (denoised_amp, denoised_pha, denoised_com)
 
 
-def anti_wrapping_function(x):
-    return torch.abs(x - torch.round(x / (2 * np.pi)) * 2 * np.pi)
+@tables.register("models", "MP_SENetFIG6")
+class MPNetTFIG6(nn.Module):
+    def __init__(self, h=h_dict, num_tsblocks=4):
+        super().__init__()
+        self.h = h
+        self.num_tscblocks = num_tsblocks
+        self.dense_encoder = DenseEncoder(h, in_channel=3)
 
+        self.TSTransformer = nn.ModuleList([])
+        for i in range(num_tsblocks):
+            self.TSTransformer.append(TSTransformerBlock(h))
 
-def pesq_score(utts_r, utts_g, h):
-    pesq_score = Parallel(n_jobs=30)(
-        delayed(eval_pesq)(
-            utts_r[i].squeeze().cpu().numpy(), utts_g[i].squeeze().cpu().numpy(), h.sampling_rate
+        self.mask_decoder = MaskDecoder(h, out_channel=1)
+        self.phase_decoder = PhaseDecoder(h, out_channel=1)
+
+        self.stft = STFT(h.win_size, h.hop_size)
+        self.reso = 16000 / h.win_size
+
+    def forward(self, inp, HL):  # [B, F, T]
+        x = self.stft.transform(inp)  # b,2,t,f
+        hl = expand_HT(HL, x.shape[-2], self.reso)  # B,C(1),T,F
+        # x = torch.stack((noisy_amp, noisy_pha), dim=-1).permute(0, 3, 2, 1)  # [B, 2, T, F]
+        noisy_amp = x.pow(2).sum(1).sqrt().permute(0, 2, 1)  # B,F,T
+        x = torch.concat([x, hl], dim=1)
+        x = self.dense_encoder(x)
+
+        for i in range(self.num_tscblocks):
+            x = self.TSTransformer[i](x)
+
+        denoised_amp = noisy_amp * self.mask_decoder(x)
+        denoised_pha = self.phase_decoder(x)
+        denoised_com = torch.stack(
+            (denoised_amp * torch.cos(denoised_pha), denoised_amp * torch.sin(denoised_pha)), dim=-1
+        )  # b,f,t,2
+        out = self.stft.inverse(denoised_com.permute(0, 3, 2, 1))
+
+        return out
+
+    def loss(self, sph, enh):
+        """
+        B,T
+        """
+        sph = sph[:, : enh.size(-1)]
+        xk_sph = self.stft.transform(sph)
+        xk_enh = self.stft.transform(enh)
+
+        phase_sph = torch.atan2(xk_sph[:, 1, ...], xk_sph[:, 0, ...]).transpose(-1, -2)
+        phase_enh = torch.atan2(xk_enh[:, 1, ...], xk_enh[:, 0, ...]).transpose(-1, -2)
+        mag_sph = xk_sph.pow(2).sum(1).sqrt()
+        mag_enh = xk_enh.pow(2).sum(1).sqrt()
+
+        time_lv = 0.2 * F.l1_loss(sph, enh)
+        phase_lv, meta = phase_losses(phase_sph, phase_enh)
+        mag_lv = 0.9 * F.mse_loss(mag_sph, mag_enh)
+        spec_lv = 0.1 * F.mse_loss(xk_sph, xk_enh)
+
+        loss_lv = time_lv + mag_lv + spec_lv + 0.3 * phase_lv
+        meta.update(
+            {
+                "loss": loss_lv,
+                "time_lv": time_lv.detach(),
+                "mag_lv": mag_lv.detach(),
+                "spec_lv": spec_lv.detach(),
+                "phase_lv": 0.3 * phase_lv.detach(),
+            }
         )
-        for i in range(len(utts_r))
-    )
-    pesq_score = np.mean(pesq_score)
-
-    return pesq_score
+        return meta
 
 
-def eval_pesq(clean_utt, esti_utt, sr):
-    try:
-        pesq_score = pesq(sr, clean_utt, esti_utt)
-    except:
-        pesq_score = -1
+if __name__ == "__main__":
+    inp = torch.randn(1, 16000).float()
+    lbl = torch.randn(1, 16000).float()
+    hl = torch.randn(1, 6).float()
+    net = MPNetTFIG6()
+    check_flops(net, inp, hl)
 
-    return pesq_score
+    net.loss(lbl, inp)

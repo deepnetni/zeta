@@ -256,7 +256,7 @@ class DenseEncoder(nn.Module):
 
 class DenseEncoder8(nn.Module):
     def __init__(self, in_channel, channels=64):
-        super().__init__()
+        super(DenseEncoder8, self).__init__()
         self.conv_1 = nn.Sequential(
             nn.Conv2d(in_channel, channels, (1, 3), (1, 2), padding=(0, 1)),
             LayerNorm(channels),
@@ -444,6 +444,84 @@ class Baseline(nn.Module):
 
         # return x, spec
         return x
+
+
+@tables.register("models", "baseVADSE")
+class BaselineVADSE(nn.Module):
+    r"""In-context method"""
+
+    def __init__(
+        self, nframe: int, nhop: int, mid_channel: int = 64, conformer_num=4, fs=16000
+    ) -> None:
+        super().__init__()
+
+        self.stft = STFT(nframe, nhop, nframe)
+        self.reso = fs / nframe
+        nbin = nframe // 2 + 1
+        assert 250 % self.reso == 0
+
+        self.encoder = DenseEncoder(in_channel=2, channels=mid_channel)
+        self.conformer = nn.ModuleList([FTConformer(dim=mid_channel) for _ in range(conformer_num)])
+
+        self.mask_decoder = MaskDecoder(num_features=nbin, num_channel=mid_channel, out_channel=1)
+        self.complex_decoder = ComplexDecoder(num_channel=mid_channel)
+
+        self.vad_predictor = nn.Sequential(
+            nn.AvgPool2d(kernel_size=(1, 65), stride=(1, 65)),  # B,C,T,1
+            nn.Conv2d(
+                in_channels=mid_channel,
+                out_channels=mid_channel,
+                kernel_size=1,
+                stride=1,
+                padding=0,
+            ),  # b,c,t,1
+            Rearrange("b c t ()->b t c"),
+            nn.LayerNorm(mid_channel),
+            nn.PReLU(),
+            nn.GRU(
+                input_size=mid_channel,
+                hidden_size=128,
+                num_layers=2,
+                batch_first=True,
+            ),
+        )
+
+        self.vad_post = nn.Sequential(
+            nn.Linear(128, 1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        """
+        x: B,T
+        HL: B,6
+        """
+        xk = self.stft.transform(x)
+        xk_mag = xk.pow(2).sum(1, keepdim=True).sqrt()  # B,1,T,F
+
+        xk = self.encoder(xk)
+
+        for l in self.conformer:
+            xk, _ = l(xk, causal=True)  # b,c,t,f
+
+        vad_pred, _ = self.vad_predictor(xk)
+        vad = self.vad_post(vad_pred)
+
+        mask = self.mask_decoder(xk)
+        spec = self.complex_decoder(xk)
+        r, i = spec.chunk(2, dim=1)  # b,1,t,f
+        phase = torch.atan2(i, r)
+
+        xk_mag_est = xk_mag * mask
+        spec_r = xk_mag_est * torch.cos(phase)
+        spec_i = xk_mag_est * torch.sin(phase)
+
+        xk_est = torch.concat([spec_r, spec_i], dim=1)
+
+        x = self.stft.inverse(xk_est)
+
+        # return x, spec
+        return x, vad
 
 
 @tables.register("models", "baseline_fig6_vad")

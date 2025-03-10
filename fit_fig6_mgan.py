@@ -18,8 +18,9 @@ from core.Trainer_wGAN_for_fig6 import (
     TrainerHAMGAN,
     TrainerMultiOutputs,
     TrainerforBaselines,
+    TrainerforMPSENET,
 )
-from core.Trainer_wGAN_VAD_for_fig6 import TrainerVAD
+from core.Trainer_wGAN_VAD_for_fig6 import TrainerSEVAD, TrainerVAD
 from core.utils.audiolib import audioread, audiowrite
 from core.utils.ini_opts import read_ini
 from core.utils.logger import cprint
@@ -34,6 +35,7 @@ import core.NUNet_TLS
 import core.DCCRN
 import core.CRN
 import core.aia_trans_official
+import core.MP_SENet
 
 
 @dataclass
@@ -51,7 +53,7 @@ class Eng_conf:
     vtest_outdir: str = "vtest"
     dsets_raw_metrics: str = "dset_metrics.json"
 
-    train_batch_sz: int = 2  # 6(48), 10 for ftcrn
+    train_batch_sz: int = 12  # 6(48), 10 for ftcrn, 16
     train_num_workers: int = 16
     valid_batch_sz: int = 12  # 12
     valid_num_workers: int = 16
@@ -63,7 +65,7 @@ class Eng_conf:
 class Model_conf:
     nframe: int = 512
     nhop: int = 256
-    mid_channel: int = 48  # 48, 36
+    mid_channel: int = 36  # 48, 36, 60
     conformer_num: int = 2  # 2
 
 
@@ -171,6 +173,8 @@ if __name__ == "__main__":
         else:
             dset_name = "FIG6"
 
+    if md_name == "baseVADSE":
+        dset_name = "FIG6SE"
     # if args.small:
     #     if args.vad:
     #         train_dset, valid_dset, vtest_dset = get_datasets("FIG6smallVad_SIG")
@@ -198,6 +202,10 @@ if __name__ == "__main__":
         "FTCRN_BASE_VAD",
     ]:
         Trainer = TrainerVAD
+    elif md_name == "baseVADSE":
+        Trainer = TrainerSEVAD
+    elif md_name == "MP_SENetFIG6":
+        Trainer = TrainerforMPSENET
     elif md_name == "HAMGAN":
         Trainer = TrainerHAMGAN
     else:
@@ -211,7 +219,7 @@ if __name__ == "__main__":
     assert model is not None
     if "FTCRN" in md_name:
         net = model(**cfg["ftcrn_conf"])
-    elif "baseline" in md_name or "Conformer" in md_name:
+    elif "baseline" in md_name or "Conformer" in md_name or "baseVADSE" in md_name:
         net = model(**md_conf)
     else:
         net = model()

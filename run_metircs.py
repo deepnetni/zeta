@@ -21,8 +21,13 @@ md_name = [
     # "baseline_fig6_linear",
     # "baseline_fig6_vad",
     # "condConformer",
-    "IterCondConformer",
+    # "IterCondConformer",
+    # "condConformerVAD_mc36"
+    "condConformerVAD8_mc36"
     # "condConformerVAD",
+    # "condConformerVAD8_mc48"
+    # "condConformerVAD_mc60"
+    # "condConformerVAD8_mc60"
     # "FTCRN",
     # "FTCRN_BASE_VAD",
     # "FTCRN_LINEAR",
