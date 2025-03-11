@@ -33,7 +33,9 @@ class TransformerBlock(nn.Module):
         super(TransformerBlock, self).__init__()
 
         self.norm1 = LayerNorm(input_feature_size)
-        self.attention = MultiheadAttention(input_feature_size, n_heads, dropout=dropout)
+        self.attention = MultiheadAttention(
+            input_feature_size, n_heads, dropout=dropout, batch_first=True
+        )
         self.dropout1 = Dropout(dropout)
 
         self.norm2 = LayerNorm(input_feature_size)

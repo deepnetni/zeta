@@ -345,7 +345,7 @@ class FIG6Trunk(TrunkBasic):
         d_mic, fs_1 = audioread(f_mic, sub_mean=True)
         d_sph, fs_2 = audioread(f_sph)  # T,2
         # d_sph, fs_2 = sf.read(f_sph)  # T,2
-        assert fs_1 == fs_2
+        assert fs_1 == fs_2 == 16000
 
         d_mic = np.pad(d_mic[st:ed], (0, pd), "constant", constant_values=0)
         # padding inner first

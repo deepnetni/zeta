@@ -158,6 +158,7 @@ FIG6VoiceBank:
     nlen: 5.0
     min_len: 2.0
     # return_clean: True
+    vad: True
   valid:
     dirname: '/home/deepni/datasets/dns_wdrc/dev_vad'
     # dirname: '/home/deepnetni/trunk/dns_wdrc/dev_vad'
@@ -166,6 +167,7 @@ FIG6VoiceBank:
     keymap:
        - "nearend.wav"
        - "target.wav"
+    vad: True
   vtest:
     dirname: '/home/deepni/datasets/dns_wdrc/dns_testset_noverb'
     # dirname: '/home/deepni/datasets/dns_wdrc/fig6_voicebank_train'
@@ -175,6 +177,7 @@ FIG6VoiceBank:
     keymap:
        - "nearend.wav"
        - "target.wav"
+    vad: True
 
 FIG6Vad:
   new: "FIG6"

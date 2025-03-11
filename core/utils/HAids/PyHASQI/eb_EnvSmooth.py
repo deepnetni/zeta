@@ -1,7 +1,8 @@
 import numpy as np
 import librosa
 
-def eb_EnvSmooth(env,segsize,fsamp):
+
+def eb_EnvSmooth(env, segsize, fsamp):
     nwin = round(segsize * (0.001 * fsamp))
     nhalf = int(nwin / 2)
     window = np.hanning(nwin)
@@ -26,8 +27,6 @@ def eb_EnvSmooth(env,segsize,fsamp):
 
     # data = np.zeros((nchan, nwin, frame_num))
 
-
-
     for i in range(frame_num):
 
         if i == 0:
@@ -36,22 +35,16 @@ def eb_EnvSmooth(env,segsize,fsamp):
             nn_frames[:, :, i] = head
         elif i == frame_num - 1:
             tail = np.zeros((nchan, nwin))
-            tail[:, :nhalf] = env[:, i * nhalf:] * np.expand_dims(window[:nhalf], axis=0)
+            tail[:, :nhalf] = env[:, i * nhalf : (i + 1) * nhalf] * np.expand_dims(
+                window[:nhalf], axis=0
+            )
             nn_frames[:, :, i] = tail
         else:
-            nn_frames[:, :, i] = env[:, i*nhalf: (i*nhalf+nwin)] * window_new
-
-
+            nn_frames[:, :, i] = env[:, i * nhalf : (i * nhalf + nwin)] * window_new
 
     # data[:, :, 1:frame_num] = nn_frames[:, :, :(frame_num-1)]
     smooth[:, 0] = np.sum(nn_frames[:, :, 0], axis=1) / halfsum
     smooth[:, -1] = np.sum(nn_frames[:, :, -1], axis=1) / halfsum
-    smooth[:, 1:(frame_num - 1)] = np.sum(nn_frames[:, :, 1:(frame_num - 1)], axis=1) / wsum
-
-
+    smooth[:, 1 : (frame_num - 1)] = np.sum(nn_frames[:, :, 1 : (frame_num - 1)], axis=1) / wsum
 
     return smooth
-
-
-
-

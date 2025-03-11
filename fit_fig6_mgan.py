@@ -55,7 +55,7 @@ class Eng_conf:
     vtest_outdir: str = "vtest"
     dsets_raw_metrics: str = "dset_metrics.json"
 
-    train_batch_sz: int = 5  # 6(48), 10 for ftcrn, 12
+    train_batch_sz: int = 3  # 6(48), 10 for ftcrn, 12
     train_num_workers: int = 16
     valid_batch_sz: int = 12  # 12
 
@@ -68,7 +68,7 @@ class Eng_conf:
 class Model_conf:
     nframe: int = 512
     nhop: int = 256
-    mid_channel: int = 36  # 48, 36, 60
+    mid_channel: int = 48  # 48, 36, 60
     conformer_num: int = 2  # 2
 
 
@@ -178,11 +178,6 @@ if __name__ == "__main__":
 
     if md_name == "baseVADSE":
         dset_name = "FIG6SE"
-    # if args.small:
-    #     if args.vad:
-    #         train_dset, valid_dset, vtest_dset = get_datasets("FIG6smallVad_SIG")
-    #     else:
-    #         train_dset, valid_dset, vtest_dset = get_datasets("FIG6small_SIG")
     train_dset, valid_dset, vtest_dset = get_datasets(dset_name)
 
     if md_name in [

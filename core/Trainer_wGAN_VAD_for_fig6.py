@@ -112,7 +112,10 @@ class TrainerVAD(Trainer):
         lbl_vad = vad_to_frames(lbl_vad, 512, 256)  # B,T,1
         vad_lv = self.focal(lbl_vad, est_vad)
 
-        hasqi_score = self.batch_hasqi_score(sph, enh, HL)
+        if nlen.unique().numel() == 1:
+            hasqi_score = self.batch_hasqi_score(sph, enh, HL)
+        else:
+            hasqi_score = self.batch_hasqi_score_unfix(sph, enh, HL)
         if hasqi_score is not None:
             hasqi_score = hasqi_score.mean()
         else:

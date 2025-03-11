@@ -25,7 +25,7 @@ from utils.check_flops import check_flops
 from utils.composite_metrics import eval_composite
 from utils.Engine import EngineGAN
 from utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation_vad
-from utils.HAids.PyHASQI.HASQI_revised import HASQI_v2
+from utils.HAids.PyHASQI.HASQI_revised import HASQI_v2, HASQI_v2_for_unfixedLen
 from utils.HAids.PyHASQI.preset_parameters import generate_filter_params
 from utils.losses import loss_phase, loss_pmsqe, loss_sisnr
 from utils.record import REC
@@ -160,6 +160,26 @@ class Trainer(EngineGAN):
         with Parallel(n_jobs=24) as parallel:
             hasqi_score = parallel(
                 delayed(HASQI_v2)(o, self.fs, e, self.fs, ht) for o, e, ht in zip(sph, est, HL)
+            )
+
+        if -1 in hasqi_score or 0 in hasqi_score:
+            return None
+        # hasqi_score = np.array(hasqi_score)
+
+        return torch.FloatTensor(hasqi_score).to(self.device)
+
+    def batch_hasqi_score_unfix(self, sph, est, HL):
+        if isinstance(sph, torch.Tensor):
+            sph = sph.cpu().detach().numpy()
+        if isinstance(est, torch.Tensor):
+            est = est.cpu().detach().numpy()
+        if isinstance(HL, torch.Tensor):
+            HL = HL.cpu().detach().numpy()
+
+        with Parallel(n_jobs=24) as parallel:
+            hasqi_score = parallel(
+                delayed(HASQI_v2_for_unfixedLen)(o, self.fs, e, self.fs, ht)
+                for o, e, ht in zip(sph, est, HL)
             )
 
         if -1 in hasqi_score or 0 in hasqi_score:
@@ -534,6 +554,7 @@ class Trainer(EngineGAN):
         max_metric = self.net_D(sph, sph, HL)
         pred_metric = self.net_D(sph, enh.detach(), HL)
 
+        # sph = sph[:, : enh.size(-1)]
         hasqi_score = self.batch_hasqi_score(sph, enh, HL)
         if hasqi_score is not None:
             loss_D = F.mse_loss(pred_metric.flatten(), hasqi_score) + F.mse_loss(
@@ -580,6 +601,7 @@ class Trainer(EngineGAN):
 
         generate_filter_params(self.hasqi_filter_len[0])
         # with torch.profiler.profile() as prof:
+        skip_count = 0
         for mic, sph, HL in pbar:
             mic = mic.to(self.device)  # B,T
             sph = sph.to(self.device)  # B,T
@@ -592,11 +614,23 @@ class Trainer(EngineGAN):
             self.optimizer.zero_grad()
 
             enh, loss, loss_dict = self._fit_generator_step(mic, HL, sph=sph, one_labels=one_labels)
-
             loss.backward()
             # torch.nn.utils.clip_grad_norm_(self.net.parameters(), 3, 2)
-            self.optimizer.step()
-            losses_rec.update(loss_dict)
+
+            has_nan_inf = 0
+            for params in self.net.parameters():
+                if params.requires_grad:
+                    has_nan_inf += torch.sum(torch.isnan(params.grad))
+                    has_nan_inf += torch.sum(torch.isinf(params.grad))
+            if has_nan_inf == 0:
+                self.optimizer.step()
+                losses_rec.update(loss_dict)
+            else:
+                print("grad is nan")
+                skip_count += 1
+
+            # self.optimizer.step()
+            # losses_rec.update(loss_dict)
 
             #######################
             # Train Discriminator #
@@ -611,7 +645,11 @@ class Trainer(EngineGAN):
                 loss_D = torch.tensor([0.0])
 
             losses_rec.update({"loss_D": loss_D.detach()})
-            pbar.set_postfix(**losses_rec.state_dict())
+            # pbar.set_postfix(**losses_rec.state_dict())
+
+            show_state = losses_rec.state_dict()
+            show_state.update({"c": skip_count})
+            pbar.set_postfix(**show_state)
 
         # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
 
@@ -1528,7 +1566,7 @@ class TrainerforMPSENET(Trainer):
     ):
         super().__init__(train_dset, valid_dset, vtest_dset, train_batch_sz, vpred_dset, **kwargs)
 
-    def _fit_generator_step(self, *inputs, sph, one_labels):
+    def _fit_generator_step(self, *inputs, sph):
         """each training step in epoch, revised it if model has different output formats.
 
         :param sph:
@@ -1545,9 +1583,42 @@ class TrainerforMPSENET(Trainer):
         loss_dict = self.net.loss(sph, enh)
         loss = loss_dict["loss"]
 
-        fake_metric = self.net_D(sph, enh, HL)
-        loss_GAN = F.mse_loss(fake_metric.flatten(), one_labels)
-        loss = loss_dict["loss"] + 0.05 * loss_GAN
-        loss_dict.update({"loss_G": 0.05 * loss_GAN.detach()})
+        # fake_metric = self.net_D(sph, enh, HL)
+        # loss_GAN = F.mse_loss(fake_metric.flatten(), one_labels)
+        # loss = loss_dict["loss"] + 0.05 * loss_GAN
+        # loss_dict.update({"loss_G": 0.05 * loss_GAN.detach()})
 
         return loss, loss_dict
+
+    def _fit_each_epoch(self, epoch):
+        losses_rec = REC()
+
+        pbar = tqdm(
+            self.train_loader,
+            ncols=160,
+            leave=True,
+            desc=f"Epoch-{epoch}/{self.epochs}",
+        )
+
+        generate_filter_params(self.hasqi_filter_len[0])
+        # with torch.profiler.profile() as prof:
+        for mic, sph, HL in pbar:
+            mic = mic.to(self.device)  # B,T
+            sph = sph.to(self.device)  # B,T
+            HL = HL.to(self.device)  # B,6
+
+            ###################
+            # Train Generator #
+            ###################
+            self.optimizer.zero_grad()
+
+            loss, loss_dict = self._fit_generator_step(mic, HL, sph=sph)
+
+            loss.backward()
+            # torch.nn.utils.clip_grad_norm_(self.net.parameters(), 3, 2)
+            self.optimizer.step()
+            losses_rec.update(loss_dict)
+            pbar.set_postfix(**losses_rec.state_dict())
+        # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+
+        return losses_rec.state_dict()

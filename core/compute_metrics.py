@@ -142,11 +142,14 @@ def compute_score(spath, epath, args, **kwargs):
     """
     sdata, fs1 = audioread(spath)
     edata, fs2 = audioread(epath)
+
     # print(edata.shape) if edata.ndim > 1 else None
     # edata = edata.mean(-1) if edata.ndim > 1 else edata
     edata = edata[:, 0] if edata.ndim > 1 else edata
     sdata = sdata[:, 0] if sdata.ndim > 1 else sdata
-    sdata = sdata[: len(edata)]
+    N = min(len(sdata), len(edata))
+    sdata = sdata[:N]
+    edata = edata[:N]
     # edata = np.concatenate([np.zeros(15), sdata[: len(edata) - 15]])
 
     metrics = {}

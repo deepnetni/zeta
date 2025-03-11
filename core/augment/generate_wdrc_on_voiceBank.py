@@ -7,23 +7,27 @@ import sys
 from pathlib import Path
 from typing import Dict
 
+import librosa
 import numpy as np
 import soundfile as sf
 
-from utils.audiolib import audioread, audiowrite
+from utils.audiolib import audioread, audiowrite, normalize, rms
 from utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation_vad
 from utils.mp_decoder import mpStarMap
 from utils.vad import VAD
-from utils.audiolib import normalize, rms
 
 
 @mpStarMap(10)
-def work(fpath: str, hl, outdir, nsydir):
+def work(fpath: str, hl, outdir, nsydir, fs_tgt=16000):
     _, fname = os.path.split(fpath)
     nfpath = os.path.join(nsydir, fname)
 
     sdata, fs = audioread(fpath)
+    if fs != fs_tgt:
+        sdata = librosa.resample(sdata, orig_sr=fs, target_sr=fs_tgt)
     ndata, fs2 = audioread(nfpath)
+    if fs2 != fs_tgt:
+        ndata = librosa.resample(ndata, orig_sr=fs2, target_sr=fs_tgt)
 
     # vad_detect = VAD(10, fs, level=2)
     # vad_detect.reset()
@@ -48,10 +52,10 @@ def work(fpath: str, hl, outdir, nsydir):
 
     fname = fname.removesuffix(".wav")
 
-    sf.write(f"{outdir}/{fname}_nearend.wav", ndata, fs)
-    sf.write(f"{outdir}/{fname}_src.wav", sdata, fs)
-    sf.write(f"{outdir}/{fname}_target.wav", target, fs)
-    sf.write(f"{outdir}/{fname}_nearend_fig6.wav", ndata_fig6, fs)
+    sf.write(f"{outdir}/{fname}_nearend.wav", ndata, fs_tgt)
+    sf.write(f"{outdir}/{fname}_src.wav", sdata, fs_tgt)
+    sf.write(f"{outdir}/{fname}_target.wav", target, fs_tgt)
+    sf.write(f"{outdir}/{fname}_nearend_fig6.wav", ndata_fig6, fs_tgt)
 
     with open(f"{outdir}/{fname}.json", "w+") as fp:
         json.dump(meta, fp, indent=2)

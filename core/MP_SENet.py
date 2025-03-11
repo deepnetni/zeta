@@ -20,7 +20,7 @@ class h_dict:
     hop_size: int = 256
     win_size: int = 512
     beta: float = 2.0
-    dense_channel: int = 48
+    dense_channel: int = 64
 
 
 def phase_losses(phase_r, phase_g):
@@ -156,13 +156,13 @@ class MaskDecoder(nn.Module):
             nn.PReLU(h.dense_channel),
             nn.Conv2d(h.dense_channel, out_channel, (1, 2)),
         )
-        self.lsigmoid = LearnableSigmoid2d(h.n_fft // 2 + 1, beta=h.beta)
+        # self.lsigmoid = LearnableSigmoid2d(h.n_fft // 2 + 1, beta=h.beta)
 
     def forward(self, x):
         x = self.dense_block(x)
         x = self.mask_conv(x)
         x = x.permute(0, 3, 2, 1).squeeze(-1)  # [B, F, T]
-        x = self.lsigmoid(x)
+        # x = self.lsigmoid(x)
         return x
 
 
@@ -195,10 +195,27 @@ class TSTransformerBlock(nn.Module):
         self.time_transformer = TransformerBlock(input_feature_size=h.dense_channel, n_heads=4)
         self.freq_transformer = TransformerBlock(input_feature_size=h.dense_channel, n_heads=4)
 
+    def get_mask(self, x, attn_wlen=None):
+        """should be call outside
+        mask the componet where the mask is True.
+
+        x with shape (B,T,H)
+
+        return: B,T,T
+        """
+        nT = x.shape[-2]
+
+        mask = torch.ones(nT, nT, device=x.device, dtype=torch.bool).triu_(1)  # TxT
+        if attn_wlen is not None:
+            # assert attn_wlen >= 1
+            mask_prev = torch.ones(nT, nT, device=x.device, dtype=torch.bool).tril_(-attn_wlen)
+            mask = mask + mask_prev
+        return mask.bool()
+
     def forward(self, x):
         b, c, t, f = x.size()
         x = x.permute(0, 3, 2, 1).contiguous().view(b * f, t, c)
-        x = self.time_transformer(x) + x
+        x = self.time_transformer(x, attn_mask=self.get_mask(x)) + x
         x = x.view(b, f, t, c).permute(0, 2, 1, 3).contiguous().view(b * t, f, c)
         x = self.freq_transformer(x) + x
         x = x.view(b, t, f, c).permute(0, 3, 1, 2)
@@ -262,7 +279,7 @@ class MPNetT(nn.Module):
             x = self.TSTransformer[i](x)
 
         denoised_amp = noisy_amp * self.mask_decoder(x)
-        denoised_pha = self.phase_decoder(x)
+        denoised_pha = self.phase_decoder(x)  # b,f,t
         denoised_com = torch.stack(
             (denoised_amp * torch.cos(denoised_pha), denoised_amp * torch.sin(denoised_pha)), dim=-1
         )  # b,f,t,2
@@ -301,7 +318,7 @@ class MPNetTFIG6(nn.Module):
             x = self.TSTransformer[i](x)
 
         denoised_amp = noisy_amp * self.mask_decoder(x)
-        denoised_pha = self.phase_decoder(x)
+        denoised_pha = self.phase_decoder(x)  # B,F,T
         denoised_com = torch.stack(
             (denoised_amp * torch.cos(denoised_pha), denoised_amp * torch.sin(denoised_pha)), dim=-1
         )  # b,f,t,2
@@ -316,11 +333,12 @@ class MPNetTFIG6(nn.Module):
         sph = sph[:, : enh.size(-1)]
         xk_sph = self.stft.transform(sph)
         xk_enh = self.stft.transform(enh)
+        eps = torch.tensor(1e-7).to(sph.device)
 
-        phase_sph = torch.atan2(xk_sph[:, 1, ...], xk_sph[:, 0, ...]).transpose(-1, -2)
-        phase_enh = torch.atan2(xk_enh[:, 1, ...], xk_enh[:, 0, ...]).transpose(-1, -2)
-        mag_sph = xk_sph.pow(2).sum(1).sqrt()
-        mag_enh = xk_enh.pow(2).sum(1).sqrt()
+        phase_sph = torch.atan2(xk_sph[:, 1, ...] + eps, xk_sph[:, 0, ...] + eps).transpose(-1, -2)
+        phase_enh = torch.atan2(xk_enh[:, 1, ...] + eps, xk_enh[:, 0, ...] + eps).transpose(-1, -2)
+        mag_sph = (xk_sph.pow(2).sum(1) + eps).sqrt()
+        mag_enh = (xk_enh.pow(2).sum(1) + eps).sqrt()
 
         time_lv = 0.2 * F.l1_loss(sph, enh)
         phase_lv, meta = phase_losses(phase_sph, phase_enh)
@@ -328,6 +346,7 @@ class MPNetTFIG6(nn.Module):
         spec_lv = 0.1 * F.mse_loss(xk_sph, xk_enh)
 
         loss_lv = time_lv + mag_lv + spec_lv + 0.3 * phase_lv
+        # loss_lv = mag_lv
         meta.update(
             {
                 "loss": loss_lv,
