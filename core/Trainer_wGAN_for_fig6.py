@@ -1566,7 +1566,7 @@ class TrainerforMPSENET(Trainer):
     ):
         super().__init__(train_dset, valid_dset, vtest_dset, train_batch_sz, vpred_dset, **kwargs)
 
-    def _fit_generator_step(self, *inputs, sph):
+    def _fit_generator_step(self, *inputs, sph, one_labels):
         """each training step in epoch, revised it if model has different output formats.
 
         :param sph:
@@ -1583,42 +1583,56 @@ class TrainerforMPSENET(Trainer):
         loss_dict = self.net.loss(sph, enh)
         loss = loss_dict["loss"]
 
-        # fake_metric = self.net_D(sph, enh, HL)
-        # loss_GAN = F.mse_loss(fake_metric.flatten(), one_labels)
-        # loss = loss_dict["loss"] + 0.05 * loss_GAN
-        # loss_dict.update({"loss_G": 0.05 * loss_GAN.detach()})
+        fake_metric = self.net_D(sph, enh, HL)
+        loss_GAN = F.mse_loss(fake_metric.flatten(), one_labels)
+        loss = loss_dict["loss"] + 0.05 * loss_GAN
+        loss_dict.update({"loss_G": 0.05 * loss_GAN.detach()})
 
-        return loss, loss_dict
+        return enh, loss, loss_dict
 
-    def _fit_each_epoch(self, epoch):
-        losses_rec = REC()
+    # def _fit_each_epoch(self, epoch):
+    #     losses_rec = REC()
 
-        pbar = tqdm(
-            self.train_loader,
-            ncols=160,
-            leave=True,
-            desc=f"Epoch-{epoch}/{self.epochs}",
+    #     pbar = tqdm(
+    #         self.train_loader,
+    #         ncols=160,
+    #         leave=True,
+    #         desc=f"Epoch-{epoch}/{self.epochs}",
+    #     )
+
+    #     generate_filter_params(self.hasqi_filter_len[0])
+    #     # with torch.profiler.profile() as prof:
+    #     for mic, sph, HL in pbar:
+    #         mic = mic.to(self.device)  # B,T
+    #         sph = sph.to(self.device)  # B,T
+    #         HL = HL.to(self.device)  # B,6
+
+    #         ###################
+    #         # Train Generator #
+    #         ###################
+    #         self.optimizer.zero_grad()
+
+    #         loss, loss_dict = self._fit_generator_step(mic, HL, sph=sph)
+
+    #         loss.backward()
+    #         # torch.nn.utils.clip_grad_norm_(self.net.parameters(), 3, 2)
+    #         self.optimizer.step()
+    #         losses_rec.update(loss_dict)
+    #         pbar.set_postfix(**losses_rec.state_dict())
+    #     # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+
+    #     return losses_rec.state_dict()
+
+    def _fit_discriminator_step(self, *inputs, sph, one_labels):
+        enh, HL = inputs
+        max_metric = self.net_D(sph, sph, HL)
+        pred_metric = self.net_D(sph, enh.detach(), HL)
+
+        # sph = sph[:, : enh.size(-1)]
+        # hasqi_score = self.batch_hasqi_score(sph, enh, HL)
+        pesq_score = torch.from_numpy(self._pesq(sph, enh, 16000)).float().to(enh.device)
+        loss_D = F.mse_loss(pred_metric.flatten(), pesq_score) + F.mse_loss(
+            max_metric.flatten(), one_labels
         )
 
-        generate_filter_params(self.hasqi_filter_len[0])
-        # with torch.profiler.profile() as prof:
-        for mic, sph, HL in pbar:
-            mic = mic.to(self.device)  # B,T
-            sph = sph.to(self.device)  # B,T
-            HL = HL.to(self.device)  # B,6
-
-            ###################
-            # Train Generator #
-            ###################
-            self.optimizer.zero_grad()
-
-            loss, loss_dict = self._fit_generator_step(mic, HL, sph=sph)
-
-            loss.backward()
-            # torch.nn.utils.clip_grad_norm_(self.net.parameters(), 3, 2)
-            self.optimizer.step()
-            losses_rec.update(loss_dict)
-            pbar.set_postfix(**losses_rec.state_dict())
-        # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
-
-        return losses_rec.state_dict()
+        return loss_D

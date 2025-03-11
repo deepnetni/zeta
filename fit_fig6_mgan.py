@@ -55,7 +55,7 @@ class Eng_conf:
     vtest_outdir: str = "vtest"
     dsets_raw_metrics: str = "dset_metrics.json"
 
-    train_batch_sz: int = 6  # 6(48), 10 for ftcrn, 12
+    train_batch_sz: int = 3  # 6(48), 10 for ftcrn, 12
     train_num_workers: int = 16
     valid_batch_sz: int = 12  # 12
 
