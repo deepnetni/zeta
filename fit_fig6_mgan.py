@@ -50,12 +50,12 @@ class Eng_conf:
     optimizer_name: str = "adam"
     scheduler_name: str = "stepLR"
     valid_per_epoch: int = 1
-    vtest_per_epoch: int = 1  # 0 for disabled
+    vtest_per_epoch: int = 0  # 0 for disabled
     ## the output dir to store the predict files of `vtest_dset` during testing
     vtest_outdir: str = "vtest"
     dsets_raw_metrics: str = "dset_metrics.json"
 
-    train_batch_sz: int = 3  # 6(48), 10 for ftcrn, 12
+    train_batch_sz: int = 6  # 6(48), 10 for ftcrn, 12
     train_num_workers: int = 16
     valid_batch_sz: int = 12  # 12
 
