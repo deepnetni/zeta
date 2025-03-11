@@ -309,6 +309,7 @@ class MPNetTFIG6(nn.Module):
     def forward(self, inp, HL):  # [B, F, T]
         x = self.stft.transform(inp)  # b,2,t,f
         hl = expand_HT(HL, x.shape[-2], self.reso)  # B,C(1),T,F
+        print(hl.shape, self.reso)
         # x = torch.stack((noisy_amp, noisy_pha), dim=-1).permute(0, 3, 2, 1)  # [B, 2, T, F]
         noisy_amp = x.pow(2).sum(1).sqrt().permute(0, 2, 1)  # B,F,T
         x = torch.concat([x, hl], dim=1)
