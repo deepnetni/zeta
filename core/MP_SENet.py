@@ -7,11 +7,12 @@ import torch.nn.functional as F
 from joblib import Parallel, delayed
 from pesq import pesq
 
-from JointNSHModel import expand_HT
+from .JointNSHModel import expand_HT
 from models.conv_stft import STFT
 from models.transformer import TransformerBlock
 from utils.check_flops import check_flops
 from utils.register import tables
+from torch.nn.utils import spectral_norm
 
 
 @dataclass
@@ -156,13 +157,13 @@ class MaskDecoder(nn.Module):
             nn.PReLU(h.dense_channel),
             nn.Conv2d(h.dense_channel, out_channel, (1, 2)),
         )
-        # self.lsigmoid = LearnableSigmoid2d(h.n_fft // 2 + 1, beta=h.beta)
+        self.lsigmoid = LearnableSigmoid2d(h.n_fft // 2 + 1, beta=h.beta)
 
     def forward(self, x):
         x = self.dense_block(x)
         x = self.mask_conv(x)
         x = x.permute(0, 3, 2, 1).squeeze(-1)  # [B, F, T]
-        # x = self.lsigmoid(x)
+        x = self.lsigmoid(x)
         return x
 
 
@@ -252,6 +253,58 @@ class MPNet(nn.Module):
         return denoised_amp, denoised_pha, denoised_com
 
 
+class LearnableSigmoid1d(nn.Module):
+    def __init__(self, in_features, beta=1):
+        super().__init__()
+        self.beta = beta
+        self.slope = nn.Parameter(torch.ones(in_features))
+        self.slope.requiresGrad = True
+
+    def forward(self, x):
+        return self.beta * torch.sigmoid(self.slope * x)
+
+
+class MetricDiscriminator(nn.Module):
+    def __init__(self, dim=16, in_channel=2, **kwargs):
+        super(MetricDiscriminator, self).__init__()
+        self.layers = nn.Sequential(
+            nn.utils.spectral_norm(nn.Conv2d(in_channel, dim, (4, 4), (2, 2), (1, 1), bias=False)),
+            nn.InstanceNorm2d(dim, affine=True),
+            nn.PReLU(dim),
+            nn.utils.spectral_norm(nn.Conv2d(dim, dim * 2, (4, 4), (2, 2), (1, 1), bias=False)),
+            nn.InstanceNorm2d(dim * 2, affine=True),
+            nn.PReLU(dim * 2),
+            nn.utils.spectral_norm(nn.Conv2d(dim * 2, dim * 4, (4, 4), (2, 2), (1, 1), bias=False)),
+            nn.InstanceNorm2d(dim * 4, affine=True),
+            nn.PReLU(dim * 4),
+            nn.utils.spectral_norm(nn.Conv2d(dim * 4, dim * 8, (4, 4), (2, 2), (1, 1), bias=False)),
+            nn.InstanceNorm2d(dim * 8, affine=True),
+            nn.PReLU(dim * 8),
+            nn.AdaptiveMaxPool2d(1),
+            nn.Flatten(),
+            nn.utils.spectral_norm(nn.Linear(dim * 8, dim * 4)),
+            nn.Dropout(0.3),
+            nn.PReLU(dim * 4),
+            nn.utils.spectral_norm(nn.Linear(dim * 4, 1)),
+            LearnableSigmoid1d(1),
+        )
+        self.stft = STFT(512, 256)
+
+    def forward(self, x, y):
+        """
+        x: clean_mag
+        y: est_mag
+        """
+        x_spec = self.stft.transform(x)  # b,2,t,f
+        y_spec = self.stft.transform(y)  # b,2,t,f
+
+        x_mag = torch.sum(x_spec**2, dim=1)  # b,t,f
+        y_mag = torch.sum(y_spec**2, dim=1)
+
+        xy = torch.stack((x_mag, y_mag), dim=1)
+        return self.layers(xy)
+
+
 @tables.register("models", "MP_SENet")
 class MPNetT(nn.Module):
     def __init__(self, h, num_tsblocks=4):
@@ -292,6 +345,7 @@ class MPNetT(nn.Module):
 class MPNetTFIG6(nn.Module):
     def __init__(self, h=h_dict, num_tsblocks=4):
         super().__init__()
+        # print(num_tsblocks, h)
         self.h = h
         self.num_tscblocks = num_tsblocks
         self.dense_encoder = DenseEncoder(h, in_channel=3)

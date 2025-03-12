@@ -1,0 +1,37 @@
+dset_name: FIG6VoiceBank
+# pclass: core.utils.trunk_v2.FIG6Trunk
+
+train:
+  _target_: core.utils.trunk_v2.FIG6Trunk
+  dirname: '/home/deepni/datasets/dns_wdrc/fig6_voicebank_train'
+  flist: "fig6_voicebank.csv"
+  pattern: '[!.]*_nearend.wav'
+  keymap:
+      - "nearend.wav"
+      - "target.wav"
+  nlen: 5.0
+  min_len: 1.0
+  # return_clean: True
+  vad: True
+valid:
+  _target_: core.utils.trunk_v2.FIG6Trunk
+  # dirname: '/home/deepni/datasets/dns_wdrc/dns_testset_noverb'
+  dirname: '/home/deepni/datasets/dns_wdrc/fig6_voicebank_test'
+  # dirname: '/home/deepni/datasets/dns_wdrc/dev_vad'
+  flist: "fig6_voicebank_test.csv"
+  # flist: "fig6_sig_dev_vad.csv"
+  pattern: "**/[!.]*_nearend.wav"
+  keymap:
+      - "nearend.wav"
+      - "target.wav"
+  vad: True
+vtest:
+  _target_: core.utils.trunk_v2.FIG6Trunk
+  dirname: '/home/deepni/datasets/dns_wdrc/dns_testset_noverb'
+  # dirname: '/home/deepni/datasets/dns_wdrc/fig6_voicebank_train'
+  pattern: "**/[!.]*_nearend.wav"
+  flist: "fig6_sig_dns_test.csv"
+  keymap:
+      - "nearend.wav"
+      - "target.wav"
+  # vad: True

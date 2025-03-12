@@ -1,8 +1,11 @@
-md_name: JointNSCompensation
-nframe: 512
-nhop: 256
-fs: 16000
+md_name: &name condConformerVAD
+net:
+  _target_: core.JointNSHModel.BaselineConditionalConformerVAD4
+  nframe: 512
+  nhop: 256
+  mid_channel: 48
+  conformer_num: 2
 
-epoch: 25
-lr: 5e-4
-batch_size: 15
+engine:
+  name: *name
+  _target_: core.Trainer_wGAN_VAD_for_fig6.TrainerVAD

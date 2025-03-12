@@ -571,7 +571,11 @@ class Trainer(EngineGAN):
             enh = self.net(mic, HL)  # B,T,M
 
         metric_dict = self.valid_fn(sph, enh, nlen)
-        hasqi_score = self.batch_hasqi_score(sph, enh, HL)
+        if nlen.unique().numel() == 1:
+            hasqi_score = self.batch_hasqi_score(sph, enh, HL)
+        else:
+            hasqi_score = self.batch_hasqi_score_unfix(sph, enh, HL)
+        # hasqi_score = self.batch_hasqi_score(sph, enh, HL)
         if hasqi_score is not None:
             hasqi_score = hasqi_score.mean()
         else:
@@ -1544,15 +1548,6 @@ class TrainerMC(Trainer):
             )
             idx += 1
 
-    def _config_scheduler(self, name: str, optimizer: Optimizer):
-        supported = {
-            "stepLR": lambda p: lr_scheduler.StepLR(p, step_size=30, gamma=0.5),
-            "reduceLR": lambda p: lr_scheduler.ReduceLROnPlateau(
-                p, mode="min", factor=0.5, patience=1
-            ),
-        }
-        return supported[name](optimizer)
-
 
 class TrainerforMPSENET(Trainer):
     def __init__(
@@ -1583,50 +1578,85 @@ class TrainerforMPSENET(Trainer):
         loss_dict = self.net.loss(sph, enh)
         loss = loss_dict["loss"]
 
-        fake_metric = self.net_D(sph, enh, HL)
+        fake_metric = self.net_D(sph, enh)
         loss_GAN = F.mse_loss(fake_metric.flatten(), one_labels)
         loss = loss_dict["loss"] + 0.05 * loss_GAN
         loss_dict.update({"loss_G": 0.05 * loss_GAN.detach()})
 
         return enh, loss, loss_dict
 
-    # def _fit_each_epoch(self, epoch):
-    #     losses_rec = REC()
+    def _fit_each_epoch(self, epoch):
+        losses_rec = REC()
 
-    #     pbar = tqdm(
-    #         self.train_loader,
-    #         ncols=160,
-    #         leave=True,
-    #         desc=f"Epoch-{epoch}/{self.epochs}",
-    #     )
+        # if hasattr(self.net, "setup_num"):
+        #     self.net.setup_num(epoch)
 
-    #     generate_filter_params(self.hasqi_filter_len[0])
-    #     # with torch.profiler.profile() as prof:
-    #     for mic, sph, HL in pbar:
-    #         mic = mic.to(self.device)  # B,T
-    #         sph = sph.to(self.device)  # B,T
-    #         HL = HL.to(self.device)  # B,6
+        pbar = tqdm(
+            self.train_loader,
+            ncols=160,
+            leave=True,
+            desc=f"Epoch-{epoch}/{self.epochs}",
+        )
 
-    #         ###################
-    #         # Train Generator #
-    #         ###################
-    #         self.optimizer.zero_grad()
+        generate_filter_params(self.hasqi_filter_len[0])
+        # with torch.profiler.profile() as prof:
+        skip_count = 0
+        for mic, sph, HL in pbar:
+            mic = mic.to(self.device)  # B,T
+            sph = sph.to(self.device)  # B,T
+            HL = HL.to(self.device)  # B,6
+            one_labels = torch.ones(mic.shape[0]).float().cuda()  # B,
 
-    #         loss, loss_dict = self._fit_generator_step(mic, HL, sph=sph)
+            ###################
+            # Train Generator #
+            ###################
+            self.optimizer.zero_grad()
 
-    #         loss.backward()
-    #         # torch.nn.utils.clip_grad_norm_(self.net.parameters(), 3, 2)
-    #         self.optimizer.step()
-    #         losses_rec.update(loss_dict)
-    #         pbar.set_postfix(**losses_rec.state_dict())
-    #     # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+            enh, loss, loss_dict = self._fit_generator_step(mic, HL, sph=sph, one_labels=one_labels)
+            loss.backward()
+            # torch.nn.utils.clip_grad_norm_(self.net.parameters(), 3, 2)
 
-    #     return losses_rec.state_dict()
+            has_nan_inf = 0
+            for params in self.net.parameters():
+                if params.requires_grad:
+                    has_nan_inf += torch.sum(torch.isnan(params.grad))
+                    has_nan_inf += torch.sum(torch.isinf(params.grad))
+            if has_nan_inf == 0:
+                self.optimizer.step()
+                losses_rec.update(loss_dict)
+            else:
+                print("grad is nan")
+                skip_count += 1
 
-    def _fit_discriminator_step(self, *inputs, sph, one_labels):
-        enh, HL = inputs
-        max_metric = self.net_D(sph, sph, HL)
-        pred_metric = self.net_D(sph, enh.detach(), HL)
+            # self.optimizer.step()
+            # losses_rec.update(loss_dict)
+
+            #######################
+            # Train Discriminator #
+            #######################
+            self.optimizer_D.zero_grad()
+            loss_D = self._fit_discriminator_step(enh, sph=sph, one_labels=one_labels)
+            if loss_D is not None:
+                loss_D.backward()
+                # torch.nn.utils.clip_grad_norm_(self.net.parameters(), 3, 2)
+                self.optimizer_D.step()
+            else:
+                loss_D = torch.tensor([0.0])
+
+            losses_rec.update({"loss_D": loss_D.detach()})
+            # pbar.set_postfix(**losses_rec.state_dict())
+
+            show_state = losses_rec.state_dict()
+            show_state.update({"c": skip_count})
+            pbar.set_postfix(**show_state)
+
+        # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+
+        return losses_rec.state_dict()
+
+    def _fit_discriminator_step(self, enh, sph, one_labels):
+        max_metric = self.net_D(sph, sph)
+        pred_metric = self.net_D(sph, enh.detach())
 
         # sph = sph[:, : enh.size(-1)]
         # hasqi_score = self.batch_hasqi_score(sph, enh, HL)

@@ -57,7 +57,7 @@ class Eng_conf:
 
     train_batch_sz: int = 3  # 6(48), 10 for ftcrn, 12
     train_num_workers: int = 16
-    valid_batch_sz: int = 12  # 12
+    valid_batch_sz: int = 6  # 12
 
     valid_num_workers: int = 16
     vtest_batch_sz: int = 8  # 12

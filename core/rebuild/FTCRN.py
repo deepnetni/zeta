@@ -2,9 +2,9 @@ import torch
 from torch import Tensor, nn
 
 from einops.layers.torch import Rearrange
-from models.conv_stft import STFT
-from utils.check_flops import check_flops
-from utils.register import tables
+from .models.conv_stft import STFT
+from .utils.check_flops import check_flops
+from .utils.register import tables
 from einops.layers.torch import Rearrange
 from core.JointNSHModel import HLModule
 

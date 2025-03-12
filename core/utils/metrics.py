@@ -164,8 +164,9 @@ def compute_pesq(lbl: np.ndarray, est: np.ndarray, fs=16000, norm=False, mode: s
     try:
         score = pesq(16000 if fs > 16000 else fs, lbl, est, mode)
     except Exception as e:
+        # if "No utterances detected" in str(e):
         score = 0
-        print(e)
+        # print(e)
 
     if norm:
         score = (score - 1.0) / 3.5

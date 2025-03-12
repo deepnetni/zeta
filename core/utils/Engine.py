@@ -169,6 +169,9 @@ class Engine(_EngOpts):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.net: nn.Module = net.to(self.device)
         self.fs = kwargs.get("fs", 16000)
+        self.lr = kwargs.get("lr", 5e-4)
+        self.opt_lr_step_size = kwargs.get("step_size", 30)
+        self.opt_lr_gamma = kwargs.get("gamma", 0.5)
 
         self.optimizer = self._config_optimizer(
             optimizer_name, filter(lambda p: p.requires_grad, self.net.parameters())
@@ -284,15 +287,17 @@ class Engine(_EngOpts):
     def _config_optimizer(self, name: str, params, **kwargs) -> Optimizer:
         alpha = kwargs.get("alpha", 1.0)
         supported = {
-            "adam": lambda p: torch.optim.Adam(p, lr=alpha * 5e-4, amsgrad=False),
-            "adamw": lambda p: torch.optim.AdamW(p, lr=alpha * 5e-4, amsgrad=False),
-            "rmsprop": lambda p: torch.optim.RMSprop(p, lr=alpha * 5e-4),
+            "adam": lambda p: torch.optim.Adam(p, lr=alpha * self.lr, amsgrad=False),
+            "adamw": lambda p: torch.optim.AdamW(p, lr=alpha * self.lr, amsgrad=False),
+            "rmsprop": lambda p: torch.optim.RMSprop(p, lr=alpha * self.lr),
         }
         return supported[name](params)
 
     def _config_scheduler(self, name: str, optimizer: Optimizer):
         supported = {
-            "stepLR": lambda p: lr_scheduler.StepLR(p, step_size=30, gamma=0.5),
+            "stepLR": lambda p: lr_scheduler.StepLR(
+                p, step_size=self.opt_lr_step_size, gamma=self.opt_lr_gamma
+            ),
             "reduceLR": lambda p: lr_scheduler.ReduceLROnPlateau(
                 p, mode="min", factor=0.5, patience=1
             ),

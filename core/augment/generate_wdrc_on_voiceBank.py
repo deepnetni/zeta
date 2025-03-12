@@ -41,8 +41,6 @@ def work(fpath: str, hl, outdir, nsydir, fs_tgt=16000):
         pow = np.random.uniform(-25, -30)
         sdata, scalar = normalize(sdata, pow)
         ndata = ndata * scalar
-    pow_n = rms(ndata, True)
-    meta = dict(HL=json.dumps(hl.tolist()), pow_s_raw=pow_s, pow_s=pow, pow_n=pow_n)
 
     sdata_fig6, x_vad, m_fig = FIG6_compensation_vad(hl, sdata, fs, 128, 64, ret_vad=True)
     # spl = m_fig["spl_in"]  # B,T,C

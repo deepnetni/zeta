@@ -1,0 +1,50 @@
+defaults:
+  - _self_
+  - model: joint
+  - dset: voicebankVAD
+  - override hydra/hydra_logging: none
+  - override hydra/job_logging: none
+
+model:
+  engine:
+    # _target_: core.Trainer_wGAN_for_fig6.Trainer
+    _target_: core.Trainer_wGAN_VAD_for_fig6.TrainerVAD
+    name: null
+    desc: ""
+    info_dir: "${oc.env:HOME}/model_results_trunk/FIG6/fig6_GAN"
+    resume: True
+    optimizer_name: "adam"
+    lr: 5e-4
+    epochs: 25
+    scheduler_name: "stepLR"
+    step_size: 10
+    gamma: 0.5
+    fs: 16000
+    valid_per_epoch: 1
+    vtest_per_epoch: 0
+    dsets_raw_metrics: "dset_metrics.json"
+
+    train_batch_sz: 6
+    train_num_workers: 16
+    valid_batch_sz: 12
+    valid_num_workers: 16
+    vtest_batch_sz: 8
+    vtest_num_workers: 16
+
+    valid_first: ${valid_first}
+    vtest_first: ${vtest_first}
+    root_save_dir: ${root_save_dir}
+
+    net: ${model.net}
+
+    net_D:
+        _target_: core.rebuild.FTCRN.Discriminator
+        ndf: 16
+
+    train_dset: ${dset.train}
+    valid_dset: ${dset.valid}
+    vtest_dset: ${dset.vtest}
+
+valid_first: False
+vtest_first: False
+root_save_dir: null

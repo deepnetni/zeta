@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+  - override /model: MP_SENetFIG6
+  - override /dset: voicebank
+
+model:
+  net:
+    h:
+      dense_channel: 48
+    num_tsblocks: 2
+  engine:
+    name: MP_SENet_small_48
+    net_D:
+      _target_: core.MP_SENet.MetricDiscriminator
+      dim: 16

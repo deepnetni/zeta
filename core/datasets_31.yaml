@@ -3,7 +3,6 @@ FIG6:
   # SIG Challenge Script dataset
   train:
     dirname: '/home/deepni/datasets/dns_wdrc/train_100'
-    # dirname: '/home/deepnetni/trunk/dns_wdrc/train_100'
     flist: "fig6_sig_train_100.csv"
     pattern: '[!.]*_nearend.wav'
     keymap:

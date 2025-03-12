@@ -1,10 +1,21 @@
-md_name: MP_SENet
-model:
-  n_fft:  512
-  hop_size: 256
-  win_size: 512
-  beta: 2.0
-  dense_channel: 48
+md_name: &name MP_SENet_small
+# pclass: core.MP_SENet.MPNetTFIG6
+net:
+  _target_: core.MP_SENet.MPNetTFIG6
+  h:
+    n_fft:  512
+    hop_size: 256
+    win_size: 512
+    beta: 2.0
+    dense_channel: 36
   num_tsblocks: 4
 
 engine:
+  name: *name
+  _target_: core.Trainer_wGAN_for_fig6.TrainerforMPSENET
+  train_batch_sz: 6
+  valid_batch_sz: 6
+
+  net_D:
+    _target_: core.MP_SENet.MetricDiscriminator
+    dim: 16
