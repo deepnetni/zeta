@@ -1576,7 +1576,7 @@ class TrainerforMPSENET(Trainer):
         # loss_dict = self.loss_fn(sph, enh)
         assert callable(self.net.loss)
         loss_dict = self.net.loss(sph, enh)
-        loss = loss_dict["loss"]
+        # loss = loss_dict["loss"]
 
         fake_metric = self.net_D(sph, enh)
         loss_GAN = F.mse_loss(fake_metric.flatten(), one_labels)
@@ -1660,7 +1660,7 @@ class TrainerforMPSENET(Trainer):
 
         # sph = sph[:, : enh.size(-1)]
         # hasqi_score = self.batch_hasqi_score(sph, enh, HL)
-        pesq_score = torch.from_numpy(self._pesq(sph, enh, 16000)).float().to(enh.device)
+        pesq_score = torch.from_numpy(self._pesq(sph, enh, 16000, norm=True)).float().to(enh.device)
         loss_D = F.mse_loss(pred_metric.flatten(), pesq_score) + F.mse_loss(
             max_metric.flatten(), one_labels
         )

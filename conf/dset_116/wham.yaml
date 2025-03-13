@@ -1,0 +1,32 @@
+dset_name: FIG6VoiceBank
+
+train:
+  _target_: core.utils.trunk_v2.FIG6TrunkV3
+  dirname: '/home/deepnetni/trunk/dns_wdrc/wham_train'
+  flist: "fig6_wham_train.csv"
+  pattern: '[!.]*_nearend.wav'
+  keymap:
+      - "nearend.wav"
+      - "target.wav"
+  nlen: 5.0
+  min_len: 2.0
+  # return_clean: True
+  # vad: True
+valid:
+  _target_: core.utils.trunk_v2.FIG6TrunkV3
+  dirname: '/home/deepnetni/trunk/dns_wdrc/wham_test'
+  flist: "fig6_wham_test.csv"
+  pattern: "**/[!.]*_nearend.wav"
+  keymap:
+      - "nearend.wav"
+      - "target.wav"
+  # vad: True
+vtest:
+  _target_: core.utils.trunk_v2.FIG6TrunkV3
+  dirname: '/home/deepnetni/trunk/dns_wdrc/wham_test'
+  pattern: "**/[!.]*_nearend.wav"
+  flist: "fig6_wham_test.csv"
+  keymap:
+      - "nearend.wav"
+      - "target.wav"
+  # vad: True

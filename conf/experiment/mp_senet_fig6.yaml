@@ -1,7 +1,8 @@
 # @package _global_
 defaults:
   - override /model: MP_SENetFIG6
-  - override /dset: voicebank
+  # - override /dset: voicebank
+  - override /dset: wham
 
 model:
   net:
