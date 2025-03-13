@@ -2,7 +2,7 @@
 defaults:
   - override /model: MP_SENetFIG6
   # - override /dset: voicebank
-  - override /dset: wham
+  - override /dset: libriDemand
 
 model:
   net:
@@ -11,6 +11,8 @@ model:
     num_tsblocks: 2
   engine:
     name: MP_SENet_small_48
+    # valid_batch_sz: 2
+    # valid_num_workers: 4
     net_D:
       _target_: core.MP_SENet.MetricDiscriminator
       dim: 16

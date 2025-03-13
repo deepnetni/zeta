@@ -1,0 +1,7 @@
+md_name: &name dccrn_fig6
+net:
+  _target_: core.DCCRN.DCCRN_fig6
+
+engine:
+  name: *name
+  _target_: core.Trainer_wGAN_for_fig6.TrainerforBaselines

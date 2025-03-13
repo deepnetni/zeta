@@ -97,6 +97,7 @@ class TrunkBasic(Dataset):
     ):
         super().__init__()
         across_files = kwargs.get("across_files", False)
+        self.nlen_total = -1
 
         self.dir = Path(dirname)
         self.clean_dir = Path(clean_dirname) if clean_dirname is not None else Path(dirname)
@@ -137,7 +138,9 @@ class TrunkBasic(Dataset):
             random.seed(seed)
             random.shuffle(self.f_list)
 
-        self.logger.info(f"Loading {dirname} {len(self.f_list)} files.")
+        self.logger.info(
+            f"Loading {dirname} {len(self.f_list)} files, {self.nlen_total / self.fs / 3600:.2f} hours."
+        )
 
     @property
     def dirname(self):
@@ -156,6 +159,7 @@ class TrunkBasic(Dataset):
         # idx = 0
 
         for f, nlen in flist:
+            self.nlen_total += int(nlen)
             # f = os.path.split(f[0])[-1]
             if self.N != 0:
                 st, end = 0, int(nlen)
@@ -198,6 +202,7 @@ class TrunkBasic(Dataset):
         f_list = []
 
         for f, nlen in flist:
+            self.nlen_total += int(nlen)
             if self.N != 0 and self.minN != 0:
                 st = 0
                 nlen = int(nlen)

@@ -349,7 +349,7 @@ class Synthesizer:
             {
                 "input_RMS": rms(x_transform, True).round(2),
                 "output_RMS:": rms(x_target_vad, True).round(2),
-                "SNR": np.round(snr, 2),
+                "SNR": np.round(snr, 2) if snr is not None else None,
             }
         )
         if x_noise is None:

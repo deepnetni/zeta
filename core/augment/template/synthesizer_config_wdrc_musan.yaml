@@ -24,17 +24,26 @@ onlinesynth_nearend_datasets:
   LibriSpeech:
     weight: 1.0
     dir: '/home/deepni/disk/LibriSpeech/train-clean-100'
+  LibriSpeech_dev:
+    weight: 0.0
+    dir: '/home/deepni/disk/LibriSpeech/dev-clean'
+  LibriSpeech_test:
+    weight: 0.0
+    dir: '/home/deepni/disk/LibriSpeech/test-clean'
 
 onlinesynth_nearend_noises:
   dns_challenge:
     weight: 0.0
     dir: '/home/deepni/disk/DNS-Challenge/datasets/noise'
     # dir: '/home/deepnetni/disk/DNS-Challenge/datasets/noise'
+  demand:
+    weight: 1.0
+    dir: '/home/deepni/disk/demand/16k'
   noise_92:
     weight: 0.0
     dir: '/home/deepni/disk/noise_92'
   musan:
-    weight: 1.0
+    weight: 0.0
     dir: '/home/deepni/disk/musan/noise'
   noise_wind:
     weight: 0.0

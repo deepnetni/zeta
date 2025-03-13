@@ -198,6 +198,7 @@ class Engine(_EngOpts):
         log.info(f"info dirname: {self.info_dir}")
 
         name = name if root_save_dir is None or root_save_dir == "" else root_save_dir
+        self.base_dir = self.info_dir / name
         self.ckpt_dir = self.info_dir / name / "checkpoints"
         self.ckpt_file = self.ckpt_dir / "ckpt.pth"
         self.ckpt_best_file = self.ckpt_dir / "best.pth"
@@ -223,6 +224,10 @@ class Engine(_EngOpts):
         self.writer.add_text("Description", desc, global_step=1)
         # epoch results
         self.epoch_pred_dir = self.info_dir / name / "per_epoch"
+
+    @property
+    def baseDir(self):
+        return str(self.base_dir)
 
     @staticmethod
     def _worker_set_seed(worker_id):

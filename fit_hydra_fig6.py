@@ -41,23 +41,14 @@ def fit(cfg: DictConfig):
     show_cfg(cfg.model)
     # sys.exit()
 
-    # net = instantiate(cfg.model.net)
-    # train_dset = instantiate(cfg.dset.train)
-    # valid_dset = instantiate(cfg.dset.valid)
-    # vtest_dset = instantiate(cfg.dset.vtest)
-    # eng = instantiate(
-    #     cfg.model.engine,
-    #     train_dset,
-    #     valid_dset,
-    #     vtest_dset,
-    #     net=net,
-    #     net_D=Discriminator(ndf=16),
-    # )
-
     eng = instantiate(cfg.model.engine)
 
     print(eng)
-    eng.fit()
+
+    if cfg.pred is False:
+        eng.fit()
+    else:
+        pass
 
 
 if __name__ == "__main__":
