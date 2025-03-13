@@ -1,4 +1,4 @@
-dset_name: FIG6VoiceBank
+dset_name: wham
 
 train:
   _target_: core.utils.trunk_v2.FIG6TrunkV3

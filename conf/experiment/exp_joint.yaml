@@ -1,0 +1,9 @@
+# @package _global_
+defaults:
+  - override /model: joint
+  - override /dset: whamVAD
+
+
+model:
+  engine:
+    train_batch_sz: 8
