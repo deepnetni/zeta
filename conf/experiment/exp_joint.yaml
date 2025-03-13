@@ -1,8 +1,15 @@
 # @package _global_
 defaults:
   - override /model: joint
-  - override /dset: whamVAD
+  - override /dset: libriDemand
 
+dset:
+  train:
+    vad: True
+  valid:
+    vad: True
+  vtest:
+    vad: True
 
 model:
   engine:
