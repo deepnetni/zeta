@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader, Dataset
 from torchmetrics.functional.audio.sdr import signal_distortion_ratio as SDR
 from tqdm import tqdm
 
-from Trainer_wGAN_for_fig6 import Trainer
+from .Trainer_wGAN_for_fig6 import Trainer
 from utils.check_flops import check_flops
 from utils.focal_loss import BCEFocalLoss
 from utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation_vad
@@ -88,11 +88,11 @@ class TrainerVAD(Trainer):
         pmsqe_score = loss_pmsqe(specs_sph, specs_enh)
         sc_loss, mag_loss = self.ms_stft_loss(enh, clean)
         # loss = sc_loss + mag_loss + 0.3 * pmsqe_score  # + 0.25 * pase_loss
-        loss = 0.5 * pase_lv + sc_loss + mag_loss + 0.5 * pmsqe_score  # + 0.25 * pase_loss
+        loss = 0.5 * pase_lv + sc_loss + mag_loss + 0.25 * pmsqe_score  # + 0.25 * pase_loss
 
         return {
             "loss": loss,
-            "pmsq": 0.5 * pmsqe_score.detach(),
+            "pmsq": 0.25 * pmsqe_score.detach(),
             "sc": sc_loss.detach(),
             "mag": mag_loss.detach(),
             "pase": 0.5 * pase_lv.detach(),

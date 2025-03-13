@@ -1,0 +1,9 @@
+# @package _global_
+defaults:
+  - override /dset: dnsVAD
+
+model:
+  net:
+    mid_channel: 60
+  engine:
+    name: condConformerVAD_mc60

@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - override /dset: dnsVAD
+
+model:
+  net:
+    _target_: core.JointNSHModel.BaselineConditionalConformerVAD8
+    mid_channel: 36
+  engine:
+    name: condConformerVAD8_mc60

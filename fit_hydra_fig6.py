@@ -39,6 +39,7 @@ def fit(cfg: DictConfig):
     cfg_eng.info_dir = cfg_eng.info_dir + "_" + cfg.dset.dset_name
 
     show_cfg(cfg.model)
+    # sys.exit()
 
     # net = instantiate(cfg.model.net)
     # train_dset = instantiate(cfg.dset.train)
