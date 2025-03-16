@@ -68,7 +68,7 @@ class Trainer(EngineGAN):
         # self.net_ae = net_ae.to(self.device)
         # self.net_ae.eval()
 
-        self.hasqi_filter_len = [119808, 119808, 240000]
+        self.hasqi_filter_len = [119808, 119808, 119808]
 
         self.train_loader = DataLoader(
             train_dset,

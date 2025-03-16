@@ -75,12 +75,12 @@ class TrainerVAD(Trainer):
         clean: B,T
         """
         # * pase loss
-        assert self.pase is not None
-        clean_pase = self.pase(clean.unsqueeze(1))  # B,1,T
-        clean_pase = clean_pase.flatten(0)
-        enh_pase = self.pase(enh.unsqueeze(1))
-        enh_pase = enh_pase.flatten(0)
-        pase_lv = F.mse_loss(clean_pase, enh_pase)
+        # assert self.pase is not None
+        # clean_pase = self.pase(clean.unsqueeze(1))  # B,1,T
+        # clean_pase = clean_pase.flatten(0)
+        # enh_pase = self.pase(enh.unsqueeze(1))
+        # enh_pase = enh_pase.flatten(0)
+        # pase_lv = F.mse_loss(clean_pase, enh_pase)
 
         specs_enh = self.stft.transform(enh)  # B,2,T,F
         specs_sph = self.stft.transform(clean)
@@ -88,14 +88,15 @@ class TrainerVAD(Trainer):
         pmsqe_score = loss_pmsqe(specs_sph, specs_enh)
         sc_loss, mag_loss = self.ms_stft_loss(enh, clean)
         # loss = sc_loss + mag_loss + 0.3 * pmsqe_score  # + 0.25 * pase_loss
-        loss = 0.5 * pase_lv + sc_loss + mag_loss + 0.25 * pmsqe_score  # + 0.25 * pase_loss
+        # loss = 0.5 * pase_lv + sc_loss + mag_loss + 0.3 * pmsqe_score  # + 0.25 * pase_loss
+        loss = sc_loss + mag_loss + 0.3 * pmsqe_score  # + 0.25 * pase_loss
 
         return {
             "loss": loss,
-            "pmsq": 0.25 * pmsqe_score.detach(),
+            "pmsq": 0.3 * pmsqe_score.detach(),
             "sc": sc_loss.detach(),
             "mag": mag_loss.detach(),
-            "pase": 0.5 * pase_lv.detach(),
+            # "pase": 0.5 * pase_lv.detach(),
         }
 
     def _fit_generator_step(self, *inputs, sph, one_labels, lbl_vad):
@@ -201,7 +202,7 @@ class TrainerVAD(Trainer):
                 loss_D = torch.tensor([0.0])
 
             losses_rec.update({"loss_D": loss_D.detach()})
-            pbar.set_postfix(**losses_rec.state_dict())
+            pbar.set_postfix(losses_rec.state_dict())
 
         return losses_rec.state_dict()
 
@@ -238,7 +239,7 @@ class TrainerVAD(Trainer):
 
             # record the loss
             metric_rec.update(metric_dict)
-            pbar.set_postfix(**metric_rec.state_dict())
+            pbar.set_postfix(metric_rec.state_dict())
             # break
 
         out = {}
@@ -264,7 +265,7 @@ class TrainerVAD(Trainer):
         # vtest_outdir = os.path.join(self.vtest_outdir, dirname)
         # shutil.rmtree(vtest_outdir) if os.path.exists(vtest_outdir) else None
 
-        generate_filter_params(240000)
+        generate_filter_params(119808)
         for mic, lbl, HL, nlen in pbar:
             sph, lbl_vad = lbl[..., 0], lbl[..., 1]
             mic = mic.to(self.device)  # B,T,6
@@ -361,10 +362,9 @@ class TrainerSEVAD(TrainerVAD):
             self.optimizer.step()
             losses_rec.update(loss_dict)
 
-            # pbar.set_postfix(**losses_rec.state_dict())
-            show_state = losses_rec.state_dict()
-            # show_state.update({"c": skip_count})
-            pbar.set_postfix(**show_state)
+            pbar.set_postfix(losses_rec.state_dict())
+            # show_state = losses_rec.state_dict()
+            # pbar.set_postfix(**show_state)
 
         return losses_rec.state_dict()
 
