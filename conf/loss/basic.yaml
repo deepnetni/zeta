@@ -1,0 +1,13 @@
+- name: stft_lv
+  func:
+    _target_: core.losses.stft_loss.MultiResolutionSTFTLoss
+    fft_sizes: [1024, 512, 256]
+    hop_sizes: [512, 256, 128]
+    win_lengths: [1024, 512, 256]
+- name: pmsq
+  w: 0.3
+  func:
+    _target_: core.losses.pmsqe_loss.PMSQELoss
+# - name: pase_lv
+#   func:
+#     _target_: core.losses.pase_loss.PASELoss

@@ -23,5 +23,5 @@ class PredHandler(object):
         self.net.eval()
 
     @torch.no_grad()
-    def __call__(self, fname: str):
+    def __call__(self, dset: nn):
         pass

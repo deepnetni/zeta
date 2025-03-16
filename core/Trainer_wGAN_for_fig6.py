@@ -119,26 +119,26 @@ class Trainer(EngineGAN):
 
         self.raw_metrics = self._load_dsets_metrics(self.dsets_mfile)
 
-        self.ms_stft_loss = MultiResolutionSTFTLoss(
-            fft_sizes=[1024, 512, 256],
-            hop_sizes=[512, 256, 128],
-            win_lengths=[1024, 512, 256],
-        ).to(self.device)
-        self.ms_stft_loss.eval()
+        # self.ms_stft_loss = MultiResolutionSTFTLoss(
+        #     fft_sizes=[1024, 512, 256],
+        #     hop_sizes=[512, 256, 128],
+        #     win_lengths=[1024, 512, 256],
+        # ).to(self.device)
+        # self.ms_stft_loss.eval()
 
-        self.pase = wf_builder("core/config/frontend/PASE+.cfg")
-        assert self.pase is not None
-        self.pase.cuda()
-        self.pase.eval()
-        self.pase.load_pretrained("core/pretrained/pase_e199.ckpt", load_last=True, verbose=False)
+        # self.pase = wf_builder("core/config/frontend/PASE+.cfg")
+        # assert self.pase is not None
+        # self.pase.cuda()
+        # self.pase.eval()
+        # self.pase.load_pretrained("core/pretrained/pase_e199.ckpt", load_last=True, verbose=False)
 
-        self.APC_criterion = APC_SNR_multi_filter(
-            model_hop=128,
-            model_winlen=512,
-            mag_bins=256,
-            theta=0.01,
-            hops=[8, 16, 32, 64],
-        ).to(self.device)
+        # self.APC_criterion = APC_SNR_multi_filter(
+        #     model_hop=128,
+        #     model_winlen=512,
+        #     mag_bins=256,
+        #     theta=0.01,
+        #     hops=[8, 16, 32, 64],
+        # ).to(self.device)
 
     def _config_scheduler(self, name: str, optimizer: Optimizer):
         supported = {
@@ -534,7 +534,8 @@ class Trainer(EngineGAN):
         enh = self.net(mic, HL)  # B,T
         sph = sph[..., : enh.size(-1)]
         # loss_dict = self.loss_fn_apc_denoise(sph, enh)
-        loss_dict = self.loss_fn(sph, enh)
+        # loss_dict = self.loss_fn(sph, enh)
+        loss_dict = self.loss_fn_list(sph, enh)
 
         fake_metric = self.net_D(sph, enh, HL)
         loss_GAN = F.mse_loss(fake_metric.flatten(), one_labels)
@@ -1560,6 +1561,7 @@ class TrainerforMPSENET(Trainer):
         **kwargs,
     ):
         super().__init__(train_dset, valid_dset, vtest_dset, train_batch_sz, vpred_dset, **kwargs)
+        self.hasqi_filter_len = [119808, 119808, 119808]
 
     def _fit_generator_step(self, *inputs, sph, one_labels):
         """each training step in epoch, revised it if model has different output formats.
@@ -1646,9 +1648,10 @@ class TrainerforMPSENET(Trainer):
             losses_rec.update({"loss_D": loss_D.detach()})
             # pbar.set_postfix(**losses_rec.state_dict())
 
-            show_state = losses_rec.state_dict()
-            show_state.update({"c": skip_count})
-            pbar.set_postfix(**show_state)
+            # show_state = losses_rec.state_dict()
+            # show_state.update({"c": skip_count})
+            # pbar.set_postfix(**show_state)
+            pbar.set_postfix(dict(**losses_rec.state_dict(), c=skip_count))
 
         # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
 

@@ -3,7 +3,7 @@ import os
 import random
 from itertools import repeat
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import matplotlib
 
@@ -173,6 +173,13 @@ class Engine(_EngOpts):
         self.opt_lr_step_size = kwargs.get("step_size", 30)
         self.opt_lr_gamma = kwargs.get("gamma", 0.5)
 
+        # loss_dict: {}
+        self.loss_list = kwargs.get("loss_list", [])
+        for loss_dict in self.loss_list:
+            assert "func" in loss_dict, f"loss {loss_dict} func is None"
+            loss_dict["func"].cuda()
+            loss_dict["func"].eval()
+
         self.optimizer = self._config_optimizer(
             optimizer_name, filter(lambda p: p.requires_grad, self.net.parameters())
         )
@@ -241,6 +248,26 @@ class Engine(_EngOpts):
         g = torch.Generator()
         g.manual_seed(seed)
         return g
+
+    def loss_fn_list(self, sph, enh) -> Dict:
+        loss = torch.tensor(0.0).to(sph.deivce)
+        loss_dict = {}
+        for item in self.loss_list:
+            name = item["name"]
+            weight = item.get("w", 1.0)
+            ret = item["func"](sph, enh)
+
+            if len(ret) == 1:
+                loss = loss + weight * ret
+                loss_dict.update({name: (weight * ret).detach()})
+            else:
+                # return v, meta
+                lv, meta = ret
+                loss = loss + weight * lv
+                loss_dict.update({name: (weight * ret).detach(), **meta})
+
+        # loss_dict.update({"loss": loss})
+        return dict(loss=loss, **loss_dict)
 
     def fit(self):
         for i in range(self.start_epoch, self.epochs + 1):
@@ -370,7 +397,7 @@ class Engine(_EngOpts):
         total, trainable, total_sz = self._net_info()
         content += "=" * 60 + "\n"
         content += f"{'ckpt':<{ncol}}: {self.ckpt_file}\n"
-        content += f"{'Total':<{ncol}}: {total_sz/1024**2:.3f}MB\n"
+        content += f"{'Total':<{ncol}}: {total_sz/1024**2:.3f} MB\n"
         content += f"{'nTotal':<{ncol}}: {total:<{ncol},d}\n"
         content += f"nTrainable: {trainable: <{ncol},d}, "
         content += f"nNon-Trainable: {total-trainable: <{ncol},d}\n"
@@ -378,7 +405,7 @@ class Engine(_EngOpts):
         try:
             flops = self._net_flops()
             # content += f"FLOPS: {flops / 1024**3:.3f}G\n"
-            content += f"FLOPS: {flops / 1e9:.3f}G\n"
+            content += f"{'FLOPS':<{ncol}}: {flops / 1e9:.3f}G\n"
         except NotImplementedError:
             # content += "\n"
             pass

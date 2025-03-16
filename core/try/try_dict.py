@@ -1,18 +1,18 @@
 # from collections import defaultdict
-import numpy as np
+import time
 
-# lst = [{"a": 123}, {"a": 456}, {"b": 789}]
+import numpy as np
+from tqdm import tqdm
 
 dic = {}
 # for _ in lst:
 #     for k, v in _.items():
 #         dic.setdefault(k, []).append(v)
 
-dic.update({"a": 1, "b": 2})
-print(dic, "@")
-dic.update({"a": None, "b": 2})
-print(dic, "@")
+dic.update({"c": 1, "b": 2})
+dic.update({"c": None, "aa": 2})
 # print([{k: v} for k, v in dic.items()])
+print(dic.items(), "@")
 
 # a = {"c": 2, "d": 3}
 # a.update({"e": 4})
@@ -29,6 +29,7 @@ def f(d):
 
 
 if __name__ == "__main__":
-    a = {"1": 1, "2": 2}
-    f(a)
-    print(a)
+    a = {"a": 1, "c": 2, "b": 3}
+
+    n = dict(d=4, **a)
+    print(n)

@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from joblib import Parallel, delayed
 from pesq import pesq
 
-from .JointNSHModel import expand_HT
+from JointNSHModel import expand_HT
 from models.conv_stft import STFT
 from models.transformer import TransformerBlock
 from utils.check_flops import check_flops
@@ -21,7 +21,7 @@ class h_dict:
     hop_size: int = 256
     win_size: int = 512
     beta: float = 2.0
-    dense_channel: int = 48
+    dense_channel: int = 64
 
 
 def phase_losses(phase_r, phase_g):

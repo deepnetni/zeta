@@ -1,0 +1,11 @@
+md_name: &name condConformerVAD
+net:
+  _target_: core.JointNSHModel.BaselineConditionalConformerVAD4
+  nframe: 512
+  nhop: 256
+  mid_channel: 36
+  conformer_num: 2
+
+engine:
+  name: *name
+  _target_: core.Trainer_wGAN_VAD_for_fig6.TrainerVAD

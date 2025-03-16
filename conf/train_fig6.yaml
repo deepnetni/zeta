@@ -2,6 +2,7 @@ defaults:
   - _self_
   - model: joint
   - dset: voicebankVAD
+  - loss: basic
   - override hydra/hydra_logging: none
   - override hydra/job_logging: none
 
@@ -35,6 +36,7 @@ model:
     root_save_dir: ${root_save_dir}
 
     net: ${model.net}
+    loss_list: ${loss}
 
     net_D:
         _target_: core.rebuild.FTCRN.Discriminator

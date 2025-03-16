@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 import json
-from models.pase.models.WorkerScheduler.encoder import encoder
+from core.models.pase.models.WorkerScheduler.encoder import encoder
 import torchvision.models as models
 
 try:
@@ -463,13 +463,9 @@ class Resnet50_encoder(Model):
         )
 
         resnet = models.resnet34(pretrained=pretrained)
-        self.resnet = nn.Sequential(
-            resnet.layer1, resnet.layer2, resnet.layer3, resnet.layer4
-        )
+        self.resnet = nn.Sequential(resnet.layer1, resnet.layer2, resnet.layer3, resnet.layer4)
 
-        self.conv2 = nn.Sequential(
-            nn.Conv2d(512, 256, kernel_size=[2, 1], stride=1, bias=False)
-        )
+        self.conv2 = nn.Sequential(nn.Conv2d(512, 256, kernel_size=[2, 1], stride=1, bias=False))
 
         self.emb_dim = hidden_dim
 
