@@ -159,6 +159,10 @@ class MultiResolutionSTFTLoss(torch.nn.Module):
 
         return sc_lv + mag_lv, dict(sc=sc_lv.detach(), mag=mag_lv.detach())
 
+    @property
+    def domain(self):
+        return "time"
+
 
 if __name__ == "__main__":
     inp = torch.randn(1, 16000)

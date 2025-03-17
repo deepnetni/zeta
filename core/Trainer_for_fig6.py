@@ -22,7 +22,7 @@ from models.pase.models.frontend import wf_builder
 from utils.audiolib import audiowrite
 from utils.check_flops import check_flops
 from utils.composite_metrics import eval_composite
-from utils.Engine import Engine
+from .Engine import Engine
 from utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation_vad
 from utils.HAids.PyHASQI.HASQI_revised import HASQI_v2
 from utils.HAids.PyHASQI.preset_parameters import generate_filter_params

@@ -57,3 +57,7 @@ class PMSQELoss(nn.Module):
         score = score.mean()
 
         return score
+
+    @property
+    def domain(self):
+        return "spectrum"

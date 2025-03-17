@@ -23,7 +23,7 @@ from models.pase.models.frontend import wf_builder
 from utils.audiolib import audiowrite
 from utils.check_flops import check_flops
 from utils.composite_metrics import eval_composite
-from utils.Engine import EngineGAN
+from .Engine import EngineGAN
 from utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation_vad
 from utils.HAids.PyHASQI.HASQI_revised import HASQI_v2, HASQI_v2_for_unfixedLen
 from utils.HAids.PyHASQI.preset_parameters import generate_filter_params
@@ -228,7 +228,7 @@ class Trainer(EngineGAN):
             metric_dict.pop("score")
             # record the loss
             metric_rec.update({**metric_dict, "HASQI": hasqi_score})
-            pbar.set_postfix(**metric_rec.state_dict())
+            pbar.set_postfix(metric_rec.state_dict())
 
         dset_dict["valid"] = metric_rec.state_dict()
         print(dset_dict)
@@ -275,7 +275,7 @@ class Trainer(EngineGAN):
 
             # record the loss
             metric_rec.update({**metric_dict, "HASQI": hasqi_score})
-            pbar.set_postfix(**metric_rec.state_dict())
+            pbar.set_postfix(metric_rec.state_dict())
 
         dset_dict["vtest"] = metric_rec.state_dict()
         print(dset_dict)
@@ -514,7 +514,8 @@ class Trainer(EngineGAN):
 
         if return_loss:
             N = nlen_list.min()
-            loss_dict = self.loss_fn(sph[..., :N], enh[..., :N])
+            # loss_dict = self.loss_fn(sph[..., :N], enh[..., :N])
+            loss_dict = self.loss_fn_list(sph[..., :N], enh[..., :N])
             # loss_dict = self.loss_fn_apc_denoise(sph, enh)
         else:
             loss_dict = {}
@@ -650,11 +651,9 @@ class Trainer(EngineGAN):
                 loss_D = torch.tensor([0.0])
 
             losses_rec.update({"loss_D": loss_D.detach()})
-            # pbar.set_postfix(**losses_rec.state_dict())
+            # pbar.set_postfix(losses_rec.state_dict())
 
-            show_state = losses_rec.state_dict()
-            show_state.update({"c": skip_count})
-            pbar.set_postfix(**show_state)
+            pbar.set_postfix(dict(**losses_rec.state_dict(), c=skip_count))
 
         # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
 
@@ -691,7 +690,7 @@ class Trainer(EngineGAN):
 
             # record the loss
             metric_rec.update(metric_dict)
-            pbar.set_postfix(**metric_rec.state_dict())
+            pbar.set_postfix(metric_rec.state_dict())
             # break
 
         out = {}
@@ -738,7 +737,7 @@ class Trainer(EngineGAN):
             # metric_dict.update({"HASQI": hasqi_score})
             # record the loss
             metric_rec.update(metric_dict)
-            # pbar.set_postfix(**metric_rec.state_dict())
+            # pbar.set_postfix(metric_rec.state_dict())
             # break
 
         dirn = {}
@@ -857,7 +856,7 @@ class TrainerforBaselines(Trainer):
             # torch.nn.utils.clip_grad_norm_(self.net.parameters(), 3, 2)
             self.optimizer.step()
             losses_rec.update(loss_dict)
-            pbar.set_postfix(**losses_rec.state_dict())
+            pbar.set_postfix(losses_rec.state_dict())
         # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
 
         return losses_rec.state_dict()
@@ -1386,10 +1385,8 @@ class TrainerCompNetGAN(Trainer):
 
             # losses_rec.update({"loss_D": loss_D.detach()})
 
-            # pbar.set_postfix(**losses_rec.state_dict())
-            show_state = losses_rec.state_dict()
-            show_state.update({"c": skip_count})
-            pbar.set_postfix(**show_state)
+            # pbar.set_postfix(losses_rec.state_dict())
+            pbar.set_postfix(dict(**losses_rec.state_dict(), c=skip_count))
 
         return losses_rec.state_dict()
 
@@ -1448,7 +1445,7 @@ class TrainerMC(Trainer):
             metric_dict.pop("score")
             # record the loss
             metric_rec.update({**metric_dict, "HASQI": hasqi_score})
-            pbar.set_postfix(**metric_rec.state_dict())
+            pbar.set_postfix(metric_rec.state_dict())
 
         dset_dict["valid"] = metric_rec.state_dict()
 
@@ -1494,7 +1491,7 @@ class TrainerMC(Trainer):
 
             # record the loss
             metric_rec.update({**metric_dict, "HASQI": hasqi_score})
-            pbar.set_postfix(**metric_rec.state_dict())
+            pbar.set_postfix(metric_rec.state_dict())
 
         dset_dict["vtest"] = metric_rec.state_dict()
         print(dset_dict)
@@ -1646,7 +1643,7 @@ class TrainerforMPSENET(Trainer):
                 loss_D = torch.tensor([0.0])
 
             losses_rec.update({"loss_D": loss_D.detach()})
-            # pbar.set_postfix(**losses_rec.state_dict())
+            # pbar.set_postfix(losses_rec.state_dict())
 
             # show_state = losses_rec.state_dict()
             # show_state.update({"c": skip_count})

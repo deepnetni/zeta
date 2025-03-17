@@ -7,6 +7,8 @@ from typing import Dict, Optional, Tuple
 
 import matplotlib
 
+from .models.conv_stft import STFT
+
 # import re
 # from collections import Counter
 # from utils.audiolib import audioread
@@ -232,6 +234,8 @@ class Engine(_EngOpts):
         # epoch results
         self.epoch_pred_dir = self.info_dir / name / "per_epoch"
 
+        self.stft = STFT(512, 256).cuda()
+
     @property
     def baseDir(self):
         return str(self.base_dir)
@@ -250,21 +254,31 @@ class Engine(_EngOpts):
         return g
 
     def loss_fn_list(self, sph, enh) -> Dict:
-        loss = torch.tensor(0.0).to(sph.deivce)
+        loss = torch.tensor(0.0).to(sph.device)
         loss_dict = {}
+        assert len(self.loss_list) != 0, "without loss funtion."
+
+        sph_xk, enh_xk = None, None
+
         for item in self.loss_list:
             name = item["name"]
             weight = item.get("w", 1.0)
-            ret = item["func"](sph, enh)
 
-            if len(ret) == 1:
+            if item["func"].domain == "time":
+                ret = item["func"](sph, enh)
+            else:
+                sph_xk = self.stft.transform(sph) if sph_xk is None else sph_xk
+                enh_xk = self.stft.transform(enh) if enh_xk is None else enh_xk
+                ret = item["func"](sph_xk, enh_xk)
+
+            if not isinstance(ret, Tuple):
                 loss = loss + weight * ret
                 loss_dict.update({name: (weight * ret).detach()})
             else:
                 # return v, meta
                 lv, meta = ret
                 loss = loss + weight * lv
-                loss_dict.update({name: (weight * ret).detach(), **meta})
+                loss_dict.update({name: (weight * lv).detach(), **meta})
 
         # loss_dict.update({"loss": loss})
         return dict(loss=loss, **loss_dict)

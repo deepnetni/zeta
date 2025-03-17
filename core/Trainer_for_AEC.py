@@ -16,7 +16,7 @@ from torchmetrics.functional.audio.sdr import signal_distortion_ratio as SDR
 from core.models.APC_SNR.apc_snr import APC_SNR_multi_filter
 from core.models.conv_stft import STFT
 from core.models.pase.models.frontend import wf_builder
-from core.utils.Engine import Engine
+from core.Engine import Engine
 from core.utils.losses import *
 from core.utils.record import REC
 from core.utils.stft_loss import MultiResolutionSTFTLoss

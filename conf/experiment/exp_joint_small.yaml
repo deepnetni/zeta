@@ -1,0 +1,19 @@
+# @package _global_
+defaults:
+  - override /model: joint
+  - override /dset: libriDemand
+
+dset:
+  train:
+    vad: True
+  valid:
+    vad: True
+  vtest:
+    vad: True
+
+model:
+  net:
+    mid_channel: 36
+  engine:
+    name: condConformerVAD_mc36
+    train_batch_sz: 12

@@ -70,41 +70,42 @@ class TrainerVAD(Trainer):
 
         return enh
 
-    def loss_fn(self, clean: Tensor, enh: Tensor) -> Dict:
-        """
-        clean: B,T
-        """
-        # * pase loss
-        # assert self.pase is not None
-        # clean_pase = self.pase(clean.unsqueeze(1))  # B,1,T
-        # clean_pase = clean_pase.flatten(0)
-        # enh_pase = self.pase(enh.unsqueeze(1))
-        # enh_pase = enh_pase.flatten(0)
-        # pase_lv = F.mse_loss(clean_pase, enh_pase)
+    # def loss_fn(self, clean: Tensor, enh: Tensor) -> Dict:
+    #     """
+    #     clean: B,T
+    #     """
+    #     # * pase loss
+    #     # assert self.pase is not None
+    #     # clean_pase = self.pase(clean.unsqueeze(1))  # B,1,T
+    #     # clean_pase = clean_pase.flatten(0)
+    #     # enh_pase = self.pase(enh.unsqueeze(1))
+    #     # enh_pase = enh_pase.flatten(0)
+    #     # pase_lv = F.mse_loss(clean_pase, enh_pase)
 
-        specs_enh = self.stft.transform(enh)  # B,2,T,F
-        specs_sph = self.stft.transform(clean)
+    #     specs_enh = self.stft.transform(enh)  # B,2,T,F
+    #     specs_sph = self.stft.transform(clean)
 
-        pmsqe_score = loss_pmsqe(specs_sph, specs_enh)
-        sc_loss, mag_loss = self.ms_stft_loss(enh, clean)
-        # loss = sc_loss + mag_loss + 0.3 * pmsqe_score  # + 0.25 * pase_loss
-        # loss = 0.5 * pase_lv + sc_loss + mag_loss + 0.3 * pmsqe_score  # + 0.25 * pase_loss
-        loss = sc_loss + mag_loss + 0.3 * pmsqe_score  # + 0.25 * pase_loss
+    #     pmsqe_score = loss_pmsqe(specs_sph, specs_enh)
+    #     sc_loss, mag_loss = self.ms_stft_loss(enh, clean)
+    #     # loss = sc_loss + mag_loss + 0.3 * pmsqe_score  # + 0.25 * pase_loss
+    #     # loss = 0.5 * pase_lv + sc_loss + mag_loss + 0.3 * pmsqe_score  # + 0.25 * pase_loss
+    #     loss = sc_loss + mag_loss + 0.3 * pmsqe_score  # + 0.25 * pase_loss
 
-        return {
-            "loss": loss,
-            "pmsq": 0.3 * pmsqe_score.detach(),
-            "sc": sc_loss.detach(),
-            "mag": mag_loss.detach(),
-            # "pase": 0.5 * pase_lv.detach(),
-        }
+    #     return {
+    #         "loss": loss,
+    #         "pmsq": 0.3 * pmsqe_score.detach(),
+    #         "sc": sc_loss.detach(),
+    #         "mag": mag_loss.detach(),
+    #         # "pase": 0.5 * pase_lv.detach(),
+    #     }
 
     def _fit_generator_step(self, *inputs, sph, one_labels, lbl_vad):
         mic, HL = inputs
         enh, est_vad = self.net(mic, HL)  # B,T
         sph = sph[..., : enh.size(-1)]
         # loss_dict = self.loss_fn_apc_denoise(sph, enh, lbl_vad, est_vad)
-        loss_dict = self.loss_fn(sph, enh)
+        # loss_dict = self.loss_fn(sph, enh)
+        loss_dict = self.loss_fn_list(sph, enh)
         # * vad loss
         lbl_vad = vad_to_frames(lbl_vad, 512, 256)  # B,T,1
         vad_lv = self.focal(lbl_vad, est_vad)
@@ -288,7 +289,7 @@ class TrainerVAD(Trainer):
             # metric_dict.update({"HASQI": hasqi_score})
             # record the loss
             metric_rec.update(metric_dict)
-            # pbar.set_postfix(**metric_rec.state_dict())
+            # pbar.set_postfix(metric_rec.state_dict())
             # break
 
         dirn = {}
@@ -363,8 +364,6 @@ class TrainerSEVAD(TrainerVAD):
             losses_rec.update(loss_dict)
 
             pbar.set_postfix(losses_rec.state_dict())
-            # show_state = losses_rec.state_dict()
-            # pbar.set_postfix(**show_state)
 
         return losses_rec.state_dict()
 

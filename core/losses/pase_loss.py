@@ -24,3 +24,7 @@ class PASELoss(nn.Module):
         enh_pase = self.pase(enh.unsqueeze(1)).flatten(0)
         pase_lv = F.mse_loss(sph_pase, enh_pase)
         return pase_lv
+
+    @property
+    def domain(self):
+        return "time"
