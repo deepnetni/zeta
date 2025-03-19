@@ -48,12 +48,6 @@ class Cfg:
 cfg = asdict(Cfg())
 
 
-def load_config(config_path="SEMamba.yaml"):
-    """Load configuration from a YAML file."""
-    with open(config_path, "r") as file:
-        return yaml.safe_load(file)
-
-
 def get_padding(kernel_size, dilation=1):
     """
     Calculate the padding size for a convolutional layer.
