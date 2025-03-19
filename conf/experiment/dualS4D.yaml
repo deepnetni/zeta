@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - override /model: dualS4D
+  - override /dset: libriDemand
+  - override /loss: sisnr
+
+
+model:
+  engine:
+    train_batch_sz: 8

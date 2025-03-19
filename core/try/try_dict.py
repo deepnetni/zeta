@@ -30,6 +30,13 @@ def f(d):
 
 if __name__ == "__main__":
     a = {"a": 1, "c": 2, "b": 3}
+    b = {"e": 3, "f": {"a": 11, "b": 12, "g": 13}}
 
-    n = dict(d=4, **a)
+    # n = dict(a, **b)
+    n = dict(a, **b)
+    print(n)
+
+    g = n.get("h", {})
+    print(g)
+    g.update({"gg": 111})
     print(n)

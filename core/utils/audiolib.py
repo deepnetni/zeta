@@ -241,6 +241,7 @@ def audiowrite(
         if max_amp >= clipping_threshold:
             audio = audio / max_amp * (clipping_threshold - EPS)
 
+    destpath = os.path.expanduser(destpath)
     destpath = os.path.abspath(destpath)
     destdir = os.path.dirname(destpath)
 

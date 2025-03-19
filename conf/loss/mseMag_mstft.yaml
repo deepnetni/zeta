@@ -1,0 +1,12 @@
+- name: comMagSpec
+  func:
+    _target_: core.losses.mag_loss.ComMagSpectrumLoss
+- name: stft_lv
+  func:
+    _target_: core.losses.stft_loss.MultiResolutionSTFTLoss
+    fft_sizes: [1024, 512, 256]
+    hop_sizes: [512, 256, 128]
+    win_lengths: [1024, 512, 256]
+# - name: pase_lv
+#   func:
+#     _target_: core.losses.pase_loss.PASELoss

@@ -1,0 +1,12 @@
+- name: comMagSpec
+  func:
+    _target_: core.losses.mag_loss.ComMagEuclideanLoss
+    alpha: 0.1
+- name: time_lv
+  w: 0.2
+  func:
+    _target_: core.losses.wave_loss.WaveLoss
+- name: phase_lv
+  w: 0.3
+  func:
+    _target_: core.losses.phase_loss.PhaseLoss

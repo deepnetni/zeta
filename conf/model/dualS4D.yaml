@@ -1,0 +1,7 @@
+md_name: &name dualS4D
+net:
+  _target_: core.DualS4D.DualS4DFIG6
+
+engine:
+  name: *name
+  _target_: core.Trainer_wGAN_for_fig6.TrainerforBaselines

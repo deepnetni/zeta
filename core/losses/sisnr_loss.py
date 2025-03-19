@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def l2_norm(s: Tensor, keepdim=False):
+def l2_norm(s: torch.Tensor, keepdim=False):
     """
     sum(x^ord) ^ 1/ord
     """
@@ -14,6 +14,10 @@ class SISNRLoss(nn.Module):
     def __init__(self, zero_mean: bool = True) -> None:
         super().__init__()
         self.zero_mean = zero_mean
+
+    @property
+    def domain(self):
+        return "time"
 
     def forward(self, sph, enh):
         """

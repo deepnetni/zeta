@@ -521,7 +521,8 @@ class Trainer(EngineGAN):
             loss_dict = {}
 
         # return dict(state, **composite)
-        return dict(state, **loss_dict)
+        # return dict(state, **loss_dict)
+        return dict(state, vloss=loss_dict)
 
     def _fit_generator_step(self, *inputs, sph, one_labels):
         """each training step in epoch, revised it if model has different output formats.
@@ -536,7 +537,12 @@ class Trainer(EngineGAN):
         sph = sph[..., : enh.size(-1)]
         # loss_dict = self.loss_fn_apc_denoise(sph, enh)
         # loss_dict = self.loss_fn(sph, enh)
-        loss_dict = self.loss_fn_list(sph, enh)
+        if hasattr(self.net, "loss"):
+            assert callable(self.net.loss)
+            loss_dict = self.net.loss(sph, enh)
+        else:
+            loss_dict = self.loss_fn_list(sph, enh)
+        # loss_dict = self.loss_fn_list(sph, enh)
 
         fake_metric = self.net_D(sph, enh, HL)
         loss_GAN = F.mse_loss(fake_metric.flatten(), one_labels)
@@ -600,7 +606,7 @@ class Trainer(EngineGAN):
 
         pbar = tqdm(
             self.train_loader,
-            ncols=160,
+            ncols=self.ncol,
             leave=True,
             desc=f"Epoch-{epoch}/{self.epochs}",
         )
@@ -651,9 +657,7 @@ class Trainer(EngineGAN):
                 loss_D = torch.tensor([0.0])
 
             losses_rec.update({"loss_D": loss_D.detach()})
-            # pbar.set_postfix(losses_rec.state_dict())
-
-            pbar.set_postfix(dict(**losses_rec.state_dict(), c=skip_count))
+            pbar.set_postfix(losses_rec.state_dict())
 
         # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
 
@@ -664,7 +668,7 @@ class Trainer(EngineGAN):
 
         pbar = tqdm(
             self.valid_loader,
-            ncols=160,
+            ncols=self.ncol,
             leave=True,
             desc=f"Valid-{epoch}/{self.epochs}",
         )
@@ -690,8 +694,10 @@ class Trainer(EngineGAN):
 
             # record the loss
             metric_rec.update(metric_dict)
-            pbar.set_postfix(metric_rec.state_dict())
-            # break
+            # pbar.set_postfix(metric_rec.state_dict())
+            show_dict = dict(**metric_rec.state_dict())
+            del show_dict["vloss"]
+            pbar.set_postfix(show_dict)
 
         out = {}
         for k, v in metric_rec.state_dict().items():
@@ -709,7 +715,7 @@ class Trainer(EngineGAN):
         dirname = os.path.split(self.vtest_dset.dirname)[-1]
         pbar = tqdm(
             self.vtest_loader,
-            ncols=160,
+            ncols=self.ncol,
             leave=False,
             desc=f"vTest-{epoch}/{dirname}",
         )
@@ -737,6 +743,9 @@ class Trainer(EngineGAN):
             # metric_dict.update({"HASQI": hasqi_score})
             # record the loss
             metric_rec.update(metric_dict)
+            show_dict = dict(**metric_rec.state_dict())
+            del show_dict["vloss"]
+            pbar.set_postfix(show_dict)
             # pbar.set_postfix(metric_rec.state_dict())
             # break
 
@@ -783,10 +792,10 @@ class Trainer(EngineGAN):
 
         # from thop import profile
 
-        x = torch.randn(1, 16000)
-        hl = torch.randn(1, 6)
+        x = torch.randn(1, 16000).cuda()
+        hl = torch.randn(1, 6).cuda()
 
-        flops, params = check_flops(copy.deepcopy(self.net).cpu(), x, hl)
+        flops, params = check_flops(copy.deepcopy(self.net).cuda(), x, hl)
         # with warnings.catch_warnings():
         #     warnings.filterwarnings("ignore", message="This API is being deprecated")
         #     flops, _ = profile(
@@ -822,8 +831,11 @@ class TrainerforBaselines(Trainer):
         sph = sph[..., : enh.size(-1)]
         # loss_dict = self.loss_fn_apc_denoise(sph, enh)
         # loss_dict = self.loss_fn(sph, enh)
-        assert callable(self.net.loss)
-        loss_dict = self.net.loss(sph, enh)
+        if hasattr(self.net, "loss"):
+            assert callable(self.net.loss)
+            loss_dict = self.net.loss(sph, enh)
+        else:
+            loss_dict = self.loss_fn_list(sph, enh)
         loss = loss_dict["loss"]
 
         return loss, loss_dict
@@ -833,7 +845,7 @@ class TrainerforBaselines(Trainer):
 
         pbar = tqdm(
             self.train_loader,
-            ncols=160,
+            ncols=self.ncol,
             leave=True,
             desc=f"Epoch-{epoch}/{self.epochs}",
         )
@@ -1336,7 +1348,7 @@ class TrainerCompNetGAN(Trainer):
 
         pbar = tqdm(
             self.train_loader,
-            ncols=160,
+            ncols=self.ncol,
             leave=True,
             desc=f"Epoch-{epoch}/{self.epochs}",
         )
@@ -1412,7 +1424,7 @@ class TrainerMC(Trainer):
         metric_rec = REC()
         pbar = tqdm(
             self.valid_loader,
-            ncols=160,
+            ncols=self.ncol,
             leave=False,
             desc=f"v-{self.valid_dset.dirname}",
         )
@@ -1455,7 +1467,7 @@ class TrainerMC(Trainer):
         metric_rec = REC()
         pbar = tqdm(
             self.vtest_loader,
-            ncols=160,
+            ncols=self.ncol,
             leave=False,
             desc=f"v-{self.vtest_dset.dirname}",
         )
@@ -1573,9 +1585,13 @@ class TrainerforMPSENET(Trainer):
         sph = sph[..., : enh.size(-1)]
         # loss_dict = self.loss_fn_apc_denoise(sph, enh)
         # loss_dict = self.loss_fn(sph, enh)
-        assert callable(self.net.loss)
-        loss_dict = self.net.loss(sph, enh)
-        # loss = loss_dict["loss"]
+        # assert callable(self.net.loss)
+        # loss_dict = self.net.loss(sph, enh)
+        if hasattr(self.net, "loss"):
+            assert callable(self.net.loss)
+            loss_dict = self.net.loss(sph, enh)
+        else:
+            loss_dict = self.loss_fn_list(sph, enh)
 
         fake_metric = self.net_D(sph, enh)
         loss_GAN = F.mse_loss(fake_metric.flatten(), one_labels)
@@ -1592,7 +1608,7 @@ class TrainerforMPSENET(Trainer):
 
         pbar = tqdm(
             self.train_loader,
-            ncols=160,
+            ncols=self.ncol,
             leave=True,
             desc=f"Epoch-{epoch}/{self.epochs}",
         )

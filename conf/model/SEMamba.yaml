@@ -1,0 +1,14 @@
+md_name: &name SEMamba
+net:
+  _target_: core.SEMamba.SEMambaFIG6
+
+engine:
+  name: *name
+  _target_: core.Trainer_wGAN_for_fig6.TrainerforMPSENET
+  ncol: 200
+  train_batch_sz: 6
+  valid_batch_sz: 6
+
+  net_D:
+    _target_: core.MP_SENet.MetricDiscriminator
+    dim: 16

@@ -1,0 +1,3 @@
+- name: sisnr
+  func:
+    _target_: core.losses.sisnr_loss.SISNRLoss

@@ -59,7 +59,7 @@ class _EngOpts(object):
         sph: Union[torch.Tensor, np.ndarray],
         enh: Union[torch.Tensor, np.ndarray],
         zero_mean: bool = True,
-    ):
+    ) -> np.ndarray:
         """return numpy or torch according to the type of the input"""
         if isinstance(sph, torch.Tensor):
             sph = sph.cpu().detach().numpy()
@@ -172,6 +172,7 @@ class Engine(_EngOpts):
         self.net: nn.Module = net.to(self.device)
         self.fs = kwargs.get("fs", 16000)
         self.lr = kwargs.get("lr", 5e-4)
+        self.ncol = kwargs.get("ncol", 160)
         self.opt_lr_step_size = kwargs.get("step_size", 30)
         self.opt_lr_gamma = kwargs.get("gamma", 0.5)
 
@@ -267,8 +268,10 @@ class Engine(_EngOpts):
             if item["func"].domain == "time":
                 ret = item["func"](sph, enh)
             else:
-                sph_xk = self.stft.transform(sph) if sph_xk is None else sph_xk
-                enh_xk = self.stft.transform(enh) if enh_xk is None else enh_xk
+                if sph_xk is None:
+                    sph_xk = self.stft.transform(sph)
+                if enh_xk is None:
+                    enh_xk = self.stft.transform(enh)
                 ret = item["func"](sph_xk, enh_xk)
 
             if not isinstance(ret, Tuple):
@@ -297,7 +300,9 @@ class Engine(_EngOpts):
             self.valid_first = False
             if not self.vtest_first and self.valid_per_epoch != 0 and i % self.valid_per_epoch == 0:
                 self.net.eval()
-                score = self._valid_each_epoch(i)
+                score: Dict = self._valid_each_epoch(i)
+                vloss = score.pop("vloss", None)
+                self._print("zEvaLoss", vloss, i) if vloss is not None else None
                 self._print("Eval", score, i)
                 if "score" in score and score["score"] > self.best_score:
                     self.best_score = score["score"]
@@ -310,10 +315,13 @@ class Engine(_EngOpts):
                 for name, score in scores.items():
                     out = ""
                     # score {"-5":{"pesq":v,"stoi":v},"0":{...}}
+                    vloss = score.pop("vloss", None)
+                    self._print(f"zT-{name}-Loss", vloss, i) if vloss is not None else None
+
                     for k, v in score.items():
                         out += f"{k}:{v} " + "\n"
-                    self.writer.add_text(f"Test-{name}", out, i)
-                    self._print(f"Test-{name}", score, i)
+                    self.writer.add_text(f"T-{name}", out, i)
+                    self._print(f"T-{name}", score, i)
 
     def test(self, epoch: Optional[int] = None):
         if epoch is None:
@@ -612,6 +620,8 @@ class EngineGAN(Engine):
                 self.net.eval()
                 self.net_D.eval()
                 score = self._valid_each_epoch(i)
+                vloss = score.pop("vloss", None)
+                self._print("zEvaLoss", vloss, i) if vloss is not None else None
                 self._print("Eval", score, i)
                 if "score" in score and score["score"] > self.best_score:
                     self.best_score = score["score"]
@@ -624,10 +634,12 @@ class EngineGAN(Engine):
                 for name, score in scores.items():
                     out = ""
                     # score {"-5":{"pesq":v,"stoi":v},"0":{...}}
+                    vloss = score.pop("vloss", None)
+                    self._print(f"zT-{name}-Loss", vloss, i) if vloss is not None else None
                     for k, v in score.items():
                         out += f"{k}:{v} " + "\n"
-                    self.writer.add_text(f"Test-{name}", out, i)
-                    self._print(f"Test-{name}", score, i)
+                    self.writer.add_text(f"T-{name}", out, i)
+                    self._print(f"T-{name}", score, i)
 
 
 if __name__ == "__main__":

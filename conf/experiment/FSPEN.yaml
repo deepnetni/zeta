@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - override /model: FSPEN
+  - override /dset: libriDemand
+  - override /loss: mseMag_mstft
+
+
+model:
+  engine:
+    train_batch_sz: 12

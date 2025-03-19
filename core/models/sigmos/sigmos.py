@@ -24,9 +24,7 @@ class SigMOS:
         assert model_version in [v for v in Version]
 
         model_path_history = {
-            Version.V1: os.path.join(
-                model_dir, "model-sigmos_1697718653_41d092e8-epo-200.onnx"
-            )
+            Version.V1: os.path.join(model_dir, "model-sigmos_1697718653_41d092e8-epo-200.onnx")
         }
         self.sampling_rate = 48_000
         self.resample_type = "fft"
@@ -36,9 +34,7 @@ class SigMOS:
         self.dft_size = 960
         self.frame_size = 480
         self.window_length = 960
-        self.window = np.sqrt(np.hanning(int(self.window_length) + 1)[:-1]).astype(
-            np.float32
-        )
+        self.window = np.sqrt(np.hanning(int(self.window_length) + 1)[:-1]).astype(np.float32)
 
         options = ort.SessionOptions()
         options.inter_op_num_threads = 1
@@ -116,15 +112,15 @@ class SigMOS:
             assert x.ndim == 3
             # view.reshape (b,t,f->b,t,f,2(r,i)) -> swap b,t,2,f
             x = x.view(np.float32).reshape(x.shape + (2,)).swapaxes(-1, -2)
-            x2 = np.maximum((x * x).sum(axis=-2, keepdims=True), 1e-12)
+            x2 = np.maximum((x * x).sum(axis=-2, keepdims=True), 1e-12)  # b,t,1,f
             if compress_factor == 1:
                 mag = np.sqrt(x2)
             else:
                 x = np.power(x2, (compress_factor - 1) / 2) * x
                 mag = np.power(x2, compress_factor / 2)
 
-            features = np.concatenate((mag, x), axis=-2)
-            features = np.transpose(features, (0, 2, 1, 3))
+            features = np.concatenate((mag, x), axis=-2)  # b,t,3,f
+            features = np.transpose(features, (0, 2, 1, 3))  # b,3,t,f
             return features
 
     def run(self, audio: np.ndarray, sr=None):
