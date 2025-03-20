@@ -254,6 +254,18 @@ class Engine(_EngOpts):
         g.manual_seed(seed)
         return g
 
+    @staticmethod
+    def pbar_postfix_color(pbar, show: Dict, color: str = "green"):
+        cmap = dict(
+            red="\033[91m",
+            green="\033[92m",
+            yellow="\033[93m",
+            reset="\033[0m",
+        )
+        pbar.set_postfix_str(
+            ", ".join(f"{cmap[color]}{k}={v:>.3f}{cmap['reset']}" for k, v in show.items())
+        )
+
     def loss_fn_list(self, sph, enh) -> Dict:
         loss = torch.tensor(0.0).to(sph.device)
         loss_dict = {}

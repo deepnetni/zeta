@@ -698,6 +698,7 @@ class Trainer(EngineGAN):
             show_dict = dict(**metric_rec.state_dict())
             del show_dict["vloss"]
             pbar.set_postfix(show_dict)
+            self.pbar_postfix_color(pbar, show_dict)
 
         out = {}
         for k, v in metric_rec.state_dict().items():
@@ -746,8 +747,8 @@ class Trainer(EngineGAN):
             show_dict = dict(**metric_rec.state_dict())
             del show_dict["vloss"]
             pbar.set_postfix(show_dict)
+            # self.pbar_postfix_color(pbar, show_dict)
             # pbar.set_postfix(metric_rec.state_dict())
-            # break
 
         dirn = {}
         for k, v in metric_rec.state_dict().items():
@@ -1664,7 +1665,8 @@ class TrainerforMPSENET(Trainer):
             # show_state = losses_rec.state_dict()
             # show_state.update({"c": skip_count})
             # pbar.set_postfix(**show_state)
-            pbar.set_postfix(dict(**losses_rec.state_dict(), c=skip_count))
+            pbar.set_postfix(dict(losses_rec.state_dict(), c=skip_count))
+            # self.pbar_postfix_color(pbar, dict(losses_rec.state_dict(), c=skip_count))
 
         # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
 
