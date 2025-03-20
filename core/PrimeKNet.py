@@ -414,6 +414,7 @@ class LKFCA_NetFIG6(nn.Module):
         self.reso = 16000 / h.win_size
 
     def forward(self, inp, HL):  # [B, F, T]
+        eps = torch.finfo(inp.dtype).eps
         # noisy_mag = noisy_mag.unsqueeze(-1).permute(0, 3, 2, 1)  # [B, 1, T, F]
         # noisy_pha = noisy_pha.unsqueeze(-1).permute(0, 3, 2, 1)  # [B, 1, T, F]
         xk = self.stft.transform(inp)

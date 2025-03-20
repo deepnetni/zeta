@@ -21,7 +21,7 @@ def phase_losses(phase_r, phase_g):
 
     phase_loss = ip_loss + gd_loss + iaf_loss
     return phase_loss, dict(
-        ip_loss=ip_loss.detach(), gd_loss=gd_loss.detach(), iaf_loss=iaf_loss.detach()
+        ip_lv=ip_loss.detach(), gd_lv=gd_loss.detach(), iaf_lv=iaf_loss.detach()
     )
 
 

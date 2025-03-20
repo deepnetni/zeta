@@ -3,6 +3,7 @@ defaults:
   - override /model: MP_SENetFIG6
   # - override /dset: voicebank
   - override /dset: libriDemand
+  - override /loss: MPSENet
 
 model:
   md_name: MP_SENet

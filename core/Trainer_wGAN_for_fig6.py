@@ -1634,6 +1634,7 @@ class TrainerforMPSENET(Trainer):
 
             has_nan_inf = 0
             for params in self.net.parameters():
+                # for n, params in self.net.named_parameters():
                 if params.requires_grad:
                     has_nan_inf += torch.sum(torch.isnan(params.grad))
                     has_nan_inf += torch.sum(torch.isinf(params.grad))

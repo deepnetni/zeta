@@ -38,7 +38,7 @@ def phase_losses(phase_r, phase_g):
 
     phase_loss = ip_loss + gd_loss + iaf_loss
     return phase_loss, dict(
-        ip_loss=ip_loss.detach(), gd_loss=gd_loss.detach(), iaf_loss=iaf_loss.detach()
+        ip_lv=ip_loss.detach(), gd_lv=gd_loss.detach(), iaf_lv=iaf_loss.detach()
     )
 
 
@@ -401,16 +401,17 @@ class MPNetTFIG6(nn.Module):
 
         loss_lv = time_lv + mag_lv + spec_lv + 0.3 * phase_lv
         # loss_lv = mag_lv
-        meta.update(
+        out = dict(
             {
                 "loss": loss_lv,
                 "time_lv": time_lv.detach(),
                 "mag_lv": mag_lv.detach(),
                 "spec_lv": spec_lv.detach(),
                 "phase_lv": 0.3 * phase_lv.detach(),
-            }
+            },
+            **meta,
         )
-        return meta
+        return out
 
 
 if __name__ == "__main__":
