@@ -6,12 +6,14 @@ import warnings
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from typing import List, Tuple
 import torch
 import torch.nn.functional as F
 import yaml
 from tqdm import tqdm
 
 from core.datasets_manager import get_datasets
+from core.Trainer_wGAN_for_fig6 import TrainerCompNetGAN
 from core.Trainer_wGAN_for_fig6 import (
     Trainer,
     TrainerGumbelCodebook,
@@ -68,8 +70,35 @@ class Eng_conf:
 class Model_conf:
     nframe: int = 512
     nhop: int = 256
-    mid_channel: int = 48  # 48, 36, 60
+    mid_channel: int = 36  # 48, 36, 60
     conformer_num: int = 2  # 2
+
+
+@dataclass
+class Model_compnet_conf:
+    win_size: int = 512
+    win_shift: int = 256
+    fft_num: int = 512
+    k1: Union[Tuple, List] = (2, 3)
+    k2: Union[Tuple, List] = (2, 3)
+    c: int = 64
+    embed_dim: int = 64
+    kd1: int = 5
+    cd1: int = 64
+    d_feat: int = 256
+    hidden_dim: int = 64
+    hidden_num: int = 2
+    group_num: int = 2
+    dilations: Union[Tuple, List] = (1, 2, 5, 9)
+    inter_connect: str = "cat"
+    intra_connect: str = "cat"
+    norm_type: str = "iLN"
+    rnn_type: str = "LSTM"
+    post_type: str = "collaborative"
+    is_dual_rnn: bool = True
+    is_causal: bool = True
+    is_u2: bool = True
+    is_mu_compress: bool = True
 
 
 @dataclass
@@ -89,6 +118,7 @@ class Conf:
     config: Eng_conf = Eng_conf()
     md_conf: Model_conf = Model_conf()
     ftcrn_conf: FTCRN_conf = FTCRN_conf()
+    comp_conf: Model_compnet_conf = Model_compnet_conf()
 
 
 def parse():
@@ -206,6 +236,8 @@ if __name__ == "__main__":
         Trainer = TrainerSEVAD
     elif md_name == "MP_SENetFIG6":
         Trainer = TrainerforMPSENET
+    elif md_name == "CompNetFIG6":
+        Trainer = TrainerCompNetGAN
     elif md_name == "HAMGAN":
         Trainer = TrainerHAMGAN
     else:
@@ -219,6 +251,8 @@ if __name__ == "__main__":
     assert model is not None
     if "FTCRN" in md_name:
         net = model(**cfg["ftcrn_conf"])
+    elif "CompNet" in md_name:
+        net = model(**cfg["comp_conf"])
     elif "baseline" in md_name or "Conformer" in md_name or "baseVADSE" in md_name:
         net = model(**md_conf)
     else:

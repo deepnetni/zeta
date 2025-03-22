@@ -162,7 +162,6 @@ class Engine(_EngOpts):
         valid_per_epoch: int = 1,
         vtest_per_epoch: int = 0,
         valid_first: bool = False,
-        vtest_outdir: str = "vtest",
         dsets_raw_metrics: str = "",
         root_save_dir: Optional[str] = None,
         **kwargs,
@@ -191,7 +190,6 @@ class Engine(_EngOpts):
         self.start_epoch = 1
         self.valid_per_epoch = valid_per_epoch
         self.vtest_per_epoch = vtest_per_epoch
-        self.vtest_outdir = vtest_outdir
         self.best_score = torch.finfo(torch.float32).min
         self.seed = seed
         # self.dsets_metrics = self._load_dset_valid_info()
@@ -564,7 +562,6 @@ class EngineGAN(Engine):
         valid_per_epoch: int = 1,
         vtest_per_epoch: int = 0,
         valid_first: bool = False,
-        vtest_outdir: str = "vtest",
         dsets_raw_metrics: str = "",
         *args,
         **kwargs,
@@ -582,7 +579,6 @@ class EngineGAN(Engine):
             valid_per_epoch,
             vtest_per_epoch,
             valid_first,
-            vtest_outdir,
             dsets_raw_metrics,
             *args,
             **kwargs,

@@ -30,7 +30,7 @@ from utils.HAids.PyHASQI.preset_parameters import generate_filter_params
 from utils.losses import loss_phase, loss_pmsqe, loss_sisnr
 from utils.record import REC
 from utils.stft_loss import MultiResolutionSTFTLoss
-from utils.trunk_v2 import FIG6Trunk
+from utils.trunk_v2 import FIG6Trunk, TrunkBasic
 
 import torch.profiler
 
@@ -107,6 +107,7 @@ class Trainer(EngineGAN):
             collate_fn=pad_to_longest,
             # generator=g,
         )
+        vtest_dset = cast(TrunkBasic, vtest_dset)
         self.vtest_dset = vtest_dset
 
         if vpred_dset is None:
@@ -670,7 +671,7 @@ class Trainer(EngineGAN):
             self.valid_loader,
             ncols=self.ncol,
             leave=True,
-            desc=f"Valid-{epoch}/{self.epochs}",
+            desc=f"Valid-{epoch:>2d}/{self.epochs}",
         )
 
         draw = False
@@ -718,7 +719,7 @@ class Trainer(EngineGAN):
             self.vtest_loader,
             ncols=self.ncol,
             leave=False,
-            desc=f"vTest-{epoch}/{dirname}",
+            desc=f"vTest-{epoch:>2d}/{dirname}",
         )
         # vtest_outdir = os.path.join(self.vtest_outdir, dirname)
         # shutil.rmtree(vtest_outdir) if os.path.exists(vtest_outdir) else None

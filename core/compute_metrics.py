@@ -12,6 +12,7 @@ import ast
 from itertools import repeat
 from pathlib import Path
 from typing import Dict, List
+from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -85,49 +86,19 @@ def parse():
     return args
 
 
-def save_excel(fname: str, data: dict):
+def save_excel(fname: str, data: Dict[str, Dict]):
     """
     data:{'caf': {'pesq':np.array, 'stoi':np.array, ...}, 'bus':{...}, ...}
     """
 
     with pd.ExcelWriter(fname) as writer:
         for sheet_name, metrics in data.items():
+            metrics: Dict
             df = pd.DataFrame(metrics)
+            # print(df.columns.tolist())
             sheet_name = sheet_name.replace("/", "_")
+            # df.to_excel(writer, sheet_name=sheet_name, index=False, columns=list(metrics.keys()))
             df.to_excel(writer, sheet_name=sheet_name, index=False)
-
-
-def to_excel(data: dict, excel_f: str):
-    """
-    data:{'caf': [{'pesq':v, 'stoi':v,...}, {...}], 'bus':[], 'ped':[]}
-    """
-    if excel_f is None:
-        return
-
-    tag = excel_f.split("/")[-1].split(".")[0]
-
-    save = {}
-    for env, metrics in data.items():
-        # env: caf, bus, ...
-        # metrics: [{'pesq':v, ...}, {...}]
-
-        dic = {}  # {'pesq': [...], 'stoi': [...]}
-        for d in metrics:
-            for k, v in d.items():
-                dic.setdefault(k, []).append(v)
-
-        for k, v in dic.items():
-            # k: pesq, stoi, ...
-            # v: list[...]
-            save.setdefault(k, {"type": [tag] * len(v)}).update({env: v})
-            save.setdefault(f"all_{k}", []).extend(v)
-
-    # save: {'pesq':{'caf':[..], 'bus':[..]}, "stoi":{..}}
-    with pd.ExcelWriter(excel_f) as writer:
-        for m, d in save.items():
-            df = pd.DataFrame(d)
-            # df.to_excel(writer, sheet_name=m, index=False, header=None)
-            df.to_excel(writer, sheet_name=m, index=False)
 
 
 @mpStarMap(5, leave=False)
@@ -246,7 +217,7 @@ def compute_box(result: List) -> Dict:
     return sc
 
 
-def pack_metrics(result: List) -> Dict:
+def pack_metrics(result: List, keys: Optional[List] = None) -> Dict:
     """
     result: [{'m1':v,'m2'..}, {...}]
     return: {'m1':np.array, 'm2':...}
@@ -259,7 +230,12 @@ def pack_metrics(result: List) -> Dict:
         for k, v in d.items():
             dic.setdefault(k, []).append(v)
 
-    return {k: np.array(v).round(4) for k, v in dic.items()}
+    if keys is None:
+        stat = {k: np.array(v).round(4) for k, v in dic.items()}
+    else:
+        stat = {k: np.array(dic[k]).round(4) for k in keys}
+
+    return stat
 
 
 def sort_key(key):
@@ -283,7 +259,7 @@ if __name__ == "__main__":
     score = {}
     if os.path.isfile(args.out):
         score_l = compute_score([args.src], [args.out], args=args)
-        score = pack_metrics(score_l)  # {'m1': np.array, 'm2':..}
+        score = pack_metrics(score_l, args.metrics)  # {'m1': np.array, 'm2':..}
 
         for k, v in score.items():
             print(k)
@@ -313,11 +289,12 @@ if __name__ == "__main__":
 
             # print(root)
             score_l = compute_score(src_l, enh_l, args=args)
-            score = pack_metrics(score_l)
+            score = pack_metrics(score_l, args.metrics)
             items[subd] = score  # {"subd":{"m1":np.array, "m2":np.ndarry, ...}, ...}
 
         # items = dict(sorted(items.items()))
         sorted_keys = sorted(items.keys(), key=sort_key)
+        items = {k: items[k] for k in sorted_keys}
         save_excel(args.excel, items) if args.excel is not None and len(items) != 0 else None
 
         # for subd, scores in items.items():

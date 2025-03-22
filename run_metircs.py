@@ -10,20 +10,26 @@ from core.utils.logger import cprint
 cmd = f"python core/compute_metrics.py"
 # src = "~/trunk/dns_wdrc"
 # src = "~/datasets/dns_wdrc"
-src = "~/datasets/dns_wdrc/test_noise92"
-# src = "~/datasets/dns_wdrc/dns_testset_noverb"
+# src = "~/datasets/dns_wdrc/test_noise92"
+src = "~/datasets/dns_wdrc/dns_testset_noverb"
 _, dname = os.path.split(src)
 
-metrics = "stoi pesqw pesqn sisnr sdr hasqi"
+metrics = "hasqi pesqw pesqn sdr sisnr stoi"
 # metrics = "l3das"
 md_name = [
+    # "CRN_FIG6",
+    # "dccrn_fig6",
+    # "CMGAN_FIG6",
+    # "NUNet_TLS",
+    # "CompNetFIG6",
+    # "HAMGAN",
     # "baseline_fig6",
     # "baseline_fig6_linear",
     # "baseline_fig6_vad",
     # "condConformer",
     # "IterCondConformer",
-    # "condConformerVAD_mc36"
-    "condConformerVAD8_mc36"
+    "condConformerVAD_mc36"
+    # "condConformerVAD8_mc36"
     # "condConformerVAD",
     # "condConformerVAD8_mc48"
     # "condConformerVAD_mc60"

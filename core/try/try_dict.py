@@ -33,10 +33,14 @@ if __name__ == "__main__":
     b = {"e": 3, "f": {"a": 11, "b": 12, "g": 13}}
 
     # n = dict(a, **b)
-    n = dict(a, **b)
-    print(n)
+    # print(n)
 
-    g = n.get("h", {})
-    print(g)
-    g.update({"gg": 111})
-    print(n)
+    # g = n.get("h", {})
+    # print(g)
+    # g.update({"gg": 111})
+    # print(n)
+    #
+    o = {n: idx for idx, n in enumerate(a)}
+
+    b = o.get("e", "e")
+    print(b)
