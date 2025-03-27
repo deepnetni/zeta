@@ -6,6 +6,9 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 import matplotlib
+from torch.utils.data import DataLoader, Dataset
+from torch.nn.utils.rnn import pad_sequence
+
 
 from .models.conv_stft import STFT
 
@@ -147,10 +150,30 @@ class _EngOpts(object):
         return {k: np.array(v) for k, v in out.items()}  # {"pesq":,"csig":,"cbak","cvol"}
 
 
+def pad_to_longest_each_element(batch):
+    """
+    batch: [(mic, ref, label), (...), ...]
+    the input data, label must with shape (T,C) if time domain
+    """
+    # x[0] => mic => mic.shape[0] (T)
+    # batch.sort(key=lambda x: x[0].shape[0], reverse=True)  # data length
+
+    out = []
+    seq_len = [ele[0].size(0) for ele in batch]
+    for ele in zip(*batch):
+        ele = pad_sequence(ele, batch_first=True).float()
+        out.append(ele)
+
+    return *out, torch.tensor(seq_len)
+
+
 class Engine(_EngOpts):
     def __init__(
         self,
         name: str,
+        train_dset: Dataset,
+        valid_dset: Dataset,
+        vtest_dset: Dataset,
         net: nn.Module,
         epochs: int,
         desc: str = "",
@@ -164,6 +187,7 @@ class Engine(_EngOpts):
         valid_first: bool = False,
         dsets_raw_metrics: str = "",
         root_save_dir: Optional[str] = None,
+        vpred_dset: Optional[Dataset] = None,
         **kwargs,
     ):
         super().__init__()
@@ -174,6 +198,52 @@ class Engine(_EngOpts):
         self.ncol = kwargs.get("ncol", 160)
         self.opt_lr_step_size = kwargs.get("step_size", 30)
         self.opt_lr_gamma = kwargs.get("gamma", 0.5)
+
+        collate_fn = kwargs.get("dset_collate_fn", pad_to_longest_each_element)
+
+        self.train_loader = DataLoader(
+            train_dset,
+            batch_size=kwargs.get("train_batch_sz", 6),
+            num_workers=kwargs.get("train_num_workers", 6),
+            pin_memory=True,
+            shuffle=True,
+            worker_init_fn=self._worker_set_seed,
+            generator=self._set_generator(),
+        )
+        self.train_dset = train_dset
+        # g = torch.Generator()
+        # g.manual_seed(0)
+        self.valid_loader = DataLoader(
+            valid_dset,
+            batch_size=kwargs.get("valid_batch_sz", 2),
+            num_workers=kwargs.get("valid_num_workers", 4),
+            pin_memory=True,
+            shuffle=False,
+            worker_init_fn=self._worker_set_seed,
+            generator=self._set_generator(),
+            collate_fn=collate_fn,
+            # generator=g,
+        )
+        self.valid_dset = valid_dset
+
+        self.vtest_loader = DataLoader(
+            vtest_dset,
+            batch_size=kwargs.get("vtest_batch_sz", 2),
+            num_workers=kwargs.get("vtest_num_workers", 4),
+            pin_memory=True,
+            shuffle=False,
+            worker_init_fn=self._worker_set_seed,
+            generator=self._set_generator(),
+            collate_fn=collate_fn,
+            # generator=g,
+        )
+        # vtest_dset = cast(TrunkBasic, vtest_dset)
+        self.vtest_dset = vtest_dset
+
+        if vpred_dset is None:
+            self.vpred_dset = vtest_dset
+        else:
+            self.vpred_dset = vpred_dset
 
         # loss_dict: {}
         self.loss_list = kwargs.get("loss_list", [])
@@ -550,6 +620,9 @@ class EngineGAN(Engine):
     def __init__(
         self,
         name: str,
+        train_dset: Dataset,
+        valid_dset: Dataset,
+        vtest_dset: Dataset,
         net: nn.Module,
         net_D: nn.Module,
         epochs: int,
@@ -563,26 +636,17 @@ class EngineGAN(Engine):
         vtest_per_epoch: int = 0,
         valid_first: bool = False,
         dsets_raw_metrics: str = "",
+        root_save_dir: Optional[str] = None,
+        vpred_dset: Optional[Dataset] = None,
         *args,
         **kwargs,
     ):
-        super().__init__(
-            name,
-            net,
-            epochs,
-            desc,
-            info_dir,
-            resume,
-            optimizer_name,
-            scheduler_name,
-            seed,
-            valid_per_epoch,
-            vtest_per_epoch,
-            valid_first,
-            dsets_raw_metrics,
-            *args,
-            **kwargs,
+        # fmt: off
+        super().__init__(name, train_dset, valid_dset, vtest_dset, net, epochs,
+            desc, info_dir, resume, optimizer_name, scheduler_name, seed, valid_per_epoch,
+            vtest_per_epoch, valid_first, dsets_raw_metrics, root_save_dir, vpred_dset, *args, **kwargs,
         )
+        # fmt: on
 
         self.net_D = net_D.to(self.device)
         self.optimizer_D = self._config_optimizer(

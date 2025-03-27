@@ -49,7 +49,7 @@ def get_logger(
     mode="console",
     dirname=None,
     level="INFO",
-    fmt_msg="%(asctime)s [%(module)s:%(lineno)di, %(levelname)s] %(message)s",
+    fmt_msg="%(asctime)s [%(module)s:%(lineno)d, %(levelname)s] %(message)s",
     fmt_date="%Y-%m-%d %H:%M:%S",
 ) -> logging.Logger:
     """

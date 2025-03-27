@@ -35,22 +35,25 @@ from utils.trunk_v2 import FIG6Trunk, TrunkBasic
 import torch.profiler
 
 
-def pad_to_longest(batch):
-    """
-    batch: [(mic, ref, label), (...), ...], B,T,C
-    the input data, label must with shape (T,C) if time domain
-    """
-    batch.sort(key=lambda x: x[0].shape[0], reverse=True)  # data length
+def get_pad_func():
+    def pad_to_longest(batch):
+        """
+        batch: [(mic, ref, label), (...), ...], B,T,C
+        the input data, label must with shape (T,C) if time domain
+        """
+        batch.sort(key=lambda x: x[0].shape[0], reverse=True)  # data length
 
-    seq_len = [d.size(0) for d, _, _ in batch]
-    mic, label, hl = zip(*batch)  # B,T,C
-    mic = pad_sequence(mic, batch_first=True).float()
-    hl = pad_sequence(hl, batch_first=True).float()
-    label = pad_sequence(label, batch_first=True).float()
+        seq_len = [d.size(0) for d, _, _ in batch]
+        mic, label, hl = zip(*batch)  # B,T,C
+        mic = pad_sequence(mic, batch_first=True).float()
+        hl = pad_sequence(hl, batch_first=True).float()
+        label = pad_sequence(label, batch_first=True).float()
 
-    # data = pack_padded_sequence(data, seq_len, batch_first=True, enforce_sorted=True)
+        # data = pack_padded_sequence(data, seq_len, batch_first=True, enforce_sorted=True)
 
-    return mic, label, hl, torch.tensor(seq_len)
+        return mic, label, hl, torch.tensor(seq_len)
+
+    return pad_to_longest
 
 
 class Trainer(EngineGAN):
@@ -59,61 +62,21 @@ class Trainer(EngineGAN):
         train_dset: Dataset,
         valid_dset: Dataset,
         vtest_dset: Dataset,
-        train_batch_sz: int,
-        vpred_dset: Optional[Dataset] = None,
+        train_batch_sz,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(
+            train_dset=train_dset,
+            valid_dset=valid_dset,
+            vtest_dset=vtest_dset,
+            train_batch_sz=train_batch_sz,
+            **kwargs,
+        )
 
         # self.net_ae = net_ae.to(self.device)
         # self.net_ae.eval()
 
         self.hasqi_filter_len = [119808, 119808, 119808]
-
-        self.train_loader = DataLoader(
-            train_dset,
-            batch_size=train_batch_sz,
-            num_workers=kwargs.get("train_num_workers", 6),
-            pin_memory=True,
-            shuffle=True,
-            worker_init_fn=self._worker_set_seed,
-            generator=self._set_generator(),
-        )
-        self.train_dset = train_dset
-        # g = torch.Generator()
-        # g.manual_seed(0)
-        self.valid_loader = DataLoader(
-            valid_dset,
-            batch_size=kwargs.get("valid_batch_sz", 2),
-            num_workers=kwargs.get("valid_num_workers", 4),
-            pin_memory=True,
-            shuffle=False,
-            worker_init_fn=self._worker_set_seed,
-            generator=self._set_generator(),
-            collate_fn=pad_to_longest,
-            # generator=g,
-        )
-        valid_dset = cast(FIG6Trunk, valid_dset)
-        self.valid_dset: FIG6Trunk = valid_dset
-
-        self.vtest_loader = DataLoader(
-            vtest_dset,
-            batch_size=kwargs.get("vtest_batch_sz", 2),
-            num_workers=kwargs.get("vtest_num_workers", 4),
-            pin_memory=True,
-            shuffle=False,
-            worker_init_fn=self._worker_set_seed,
-            generator=self._set_generator(),
-            collate_fn=pad_to_longest,
-            # generator=g,
-        )
-        vtest_dset = cast(TrunkBasic, vtest_dset)
-        self.vtest_dset = vtest_dset
-
-        if vpred_dset is None:
-            self.vpred_dset = vtest_dset
-        else:
-            self.vpred_dset = vpred_dset
 
         self.stft = STFT(nframe=512, nhop=256).to(self.device)
         self.stft.eval()
@@ -1564,14 +1527,9 @@ class TrainerMC(Trainer):
 class TrainerforMPSENET(Trainer):
     def __init__(
         self,
-        train_dset: Dataset,
-        valid_dset: Dataset,
-        vtest_dset: Dataset,
-        train_batch_sz: int,
-        vpred_dset: Optional[Dataset] = None,
         **kwargs,
     ):
-        super().__init__(train_dset, valid_dset, vtest_dset, train_batch_sz, vpred_dset, **kwargs)
+        super().__init__(**kwargs)
         self.hasqi_filter_len = [119808, 119808, 119808]
 
     def _fit_generator_step(self, *inputs, sph, one_labels):

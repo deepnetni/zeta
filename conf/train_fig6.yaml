@@ -45,6 +45,9 @@ model:
     train_dset: ${dset.train}
     valid_dset: ${dset.valid}
     vtest_dset: ${dset.vtest}
+    dset_collate_fn:
+        # _target_: core.Trainer_wGAN_for_fig6.pad_to_longest
+        _target_: core.Trainer_wGAN_for_fig6.get_pad_func
 
 valid_first: False
 vtest_first: False

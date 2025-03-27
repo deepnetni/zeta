@@ -3,7 +3,6 @@
 from tqdm import tqdm
 import time
 
-
 RED = "\033[91m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"

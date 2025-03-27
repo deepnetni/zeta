@@ -52,16 +52,15 @@ def vad_to_frames(vad: Tensor, nframe: int, nhop: int):
 
 
 class TrainerVAD(Trainer):
-    def __init__(
-        self,
-        train_dset: Dataset,
-        valid_dset: Dataset,
-        vtest_dset: Dataset,
-        train_batch_sz: int,
-        vpred_dset: Optional[Dataset] = None,
-        **kwargs,
-    ):
-        super().__init__(train_dset, valid_dset, vtest_dset, train_batch_sz, vpred_dset, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(
+            # train_dset=train_dset,
+            # valid_dset=valid_dset,
+            # vtest_dset=vtest_dset,
+            # train_batch_sz=train_batch_sz,
+            # vpred_dset=vpred_dset,
+            **kwargs,
+        )
         self.focal = BCEFocalLoss(gamma=1, alpha=0.7).to(self.device)
 
     def _predict_step(self, *inputs) -> Tensor:
