@@ -396,12 +396,12 @@ class Engine(_EngOpts):
                     out = ""
                     # score {"-5":{"pesq":v,"stoi":v},"0":{...}}
                     vloss = score.pop("vloss", None)
-                    self._print(f"zT-{name}-Loss", vloss, i) if vloss is not None else None
+                    self._print(f"zTest-{name}-Loss", vloss, i) if vloss is not None else None
 
                     for k, v in score.items():
                         out += f"{k}:{v} " + "\n"
-                    self.writer.add_text(f"T-{name}", out, i)
-                    self._print(f"T-{name}", score, i)
+                    self.writer.add_text(f"Test-{name}", out, i)
+                    self._print(f"Test-{name}", score, i)
 
     def test(self, epoch: Optional[int] = None):
         if epoch is None:
@@ -707,11 +707,11 @@ class EngineGAN(Engine):
                     out = ""
                     # score {"-5":{"pesq":v,"stoi":v},"0":{...}}
                     vloss = score.pop("vloss", None)
-                    self._print(f"zT-{name}-Loss", vloss, i) if vloss is not None else None
+                    self._print(f"zTest-{name}-Loss", vloss, i) if vloss is not None else None
                     for k, v in score.items():
                         out += f"{k}:{v} " + "\n"
-                    self.writer.add_text(f"T-{name}", out, i)
-                    self._print(f"T-{name}", score, i)
+                    self.writer.add_text(f"Test-{name}", out, i)
+                    self._print(f"Test-{name}", score, i)
 
 
 if __name__ == "__main__":
