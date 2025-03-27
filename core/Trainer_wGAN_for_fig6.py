@@ -637,8 +637,6 @@ class Trainer(EngineGAN):
             desc=f"Valid-{epoch:>2d}/{self.epochs}",
         )
 
-        draw = False
-
         generate_filter_params(self.hasqi_filter_len[1])
         for mic, sph, HL, nlen in pbar:
             mic = mic.to(self.device)  # B,T,6
@@ -649,18 +647,12 @@ class Trainer(EngineGAN):
 
             enh, metric_dict = self._valid_step(mic, HL, sph=sph, nlen=nlen)
 
-            if draw is True:
-                with torch.no_grad():
-                    sxk = self.stft.transform(sph)
-                    exk = self.stft.transform(enh)
-                self._draw_spectrogram(epoch, sxk, exk, titles=("sph", "enh"))
-                draw = False
-
             # record the loss
             metric_rec.update(metric_dict)
             # pbar.set_postfix(metric_rec.state_dict())
             show_dict = dict(**metric_rec.state_dict())
-            del show_dict["vloss"]
+            if "vloss" in show_dict:
+                del show_dict["vloss"]
             pbar.set_postfix(show_dict)
             self.pbar_postfix_color(pbar, show_dict)
 
@@ -695,9 +687,6 @@ class Trainer(EngineGAN):
             nlen = self.stft.nLen(nlen).to(self.device)
 
             enh, metric_dict = self._valid_step(mic, HL, sph=sph, nlen=nlen)
-            # with torch.no_grad():
-            #     enh = self.net(mic, HL)
-
             # metric_dict = self.valid_fn(sph, enh, nlen, return_loss=False)
             # hasqi_score = self.batch_hasqi_score(sph, enh, HL)
             # if hasqi_score is not None:
@@ -709,7 +698,8 @@ class Trainer(EngineGAN):
             # record the loss
             metric_rec.update(metric_dict)
             show_dict = dict(**metric_rec.state_dict())
-            del show_dict["vloss"]
+            if "vloss" in show_dict:
+                del show_dict["vloss"]
             pbar.set_postfix(show_dict)
             # self.pbar_postfix_color(pbar, show_dict)
             # pbar.set_postfix(metric_rec.state_dict())
@@ -778,10 +768,15 @@ class TrainerforBaselines(Trainer):
         valid_dset: Dataset,
         vtest_dset: Dataset,
         train_batch_sz: int,
-        vpred_dset: Optional[Dataset] = None,
         **kwargs,
     ):
-        super().__init__(train_dset, valid_dset, vtest_dset, train_batch_sz, vpred_dset, **kwargs)
+        super().__init__(
+            train_dset=train_dset,
+            valid_dset=valid_dset,
+            vtest_dset=vtest_dset,
+            train_batch_sz=train_batch_sz,
+            **kwargs,
+        )
 
     def _fit_generator_step(self, *inputs, sph):
         """each training step in epoch, revised it if model has different output formats.

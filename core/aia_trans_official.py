@@ -280,6 +280,147 @@ class AIA_Transformer_merge(nn.Module):
         return output_mag_i, output_list_mag, output_ri_i, output_list_ri
 
 
+class AIA_Transformer_merge_cau(nn.Module):
+    """
+    Adaptive time-frequency attention Transformer with interaction on two branch
+    args:
+        input_size: int, dimension of the input feature. The input should have shape
+                    (batch, seq_len, input_size).
+        hidden_size: int, dimension of the hidden state.
+        output_size: int, dimension of the output size.
+        dropout: float, dropout ratio. Default is 0.
+        num_layers: int, number of stacked RNN layers. Default is 1.
+    """
+
+    def __init__(self, input_size, output_size, dropout=0, num_layers=1):
+        super(AIA_Transformer_merge_cau, self).__init__()
+
+        self.input_size = input_size
+        self.output_size = output_size
+        self.k1 = Parameter(torch.ones(1))
+        self.k2 = Parameter(torch.ones(1))
+
+        self.input = nn.Sequential(
+            nn.Conv2d(input_size, input_size // 2, kernel_size=1), nn.PReLU()
+        )
+
+        self.row_trans = nn.ModuleList([])
+        self.col_trans = nn.ModuleList([])
+        self.row_norm = nn.ModuleList([])
+        self.col_norm = nn.ModuleList([])
+        for i in range(num_layers):
+            self.row_trans.append(
+                TransformerEncoderLayer(
+                    d_model=input_size // 2, nhead=4, dropout=dropout, bidirectional=True
+                )
+            )
+            self.col_trans.append(
+                TransformerEncoderLayer(
+                    d_model=input_size // 2, nhead=4, dropout=dropout, bidirectional=False
+                )
+            )
+            self.row_norm.append(nn.GroupNorm(1, input_size // 2, eps=1e-8))
+            self.col_norm.append(nn.GroupNorm(1, input_size // 2, eps=1e-8))
+
+        # output layer
+        self.output = nn.Sequential(nn.PReLU(), nn.Conv2d(input_size // 2, output_size, 1))
+
+    def get_mask(self, x: torch.Tensor):
+        """should be call outside
+        mask the componet where the mask is True.
+
+        x with shape (T,B,H)
+
+        return: B,T,T
+        """
+        nT = x.shape[0]
+
+        mask = x.new_ones(nT, nT).triu_(1)  # TxT
+        return mask.bool()
+
+    def forward(self, input1, input2):
+        #  input --- [B,  C,  T, F]  --- [b, c, dim2, dim1]
+        b, c, dim2, dim1 = input1.shape
+        output_list_mag = []
+        output_list_ri = []
+        input_merge = torch.cat((input1, input2), dim=1)
+        input_mag = self.input(input_merge)
+        input_ri = self.input(input_merge)
+        for i in range(len(self.row_trans)):
+            if i >= 1:
+                output_mag_i = output_list_mag[-1] + output_list_ri[-1]
+            else:
+                output_mag_i = input_mag
+            AFA_input_mag = (
+                output_mag_i.permute(3, 0, 2, 1).contiguous().view(dim1, b * dim2, -1)
+            )  # [F, B*T, c]
+            AFA_output_mag = self.row_trans[i](AFA_input_mag)  # [F, B*T, c]
+            AFA_output_mag = (
+                AFA_output_mag.view(dim1, b, dim2, -1).permute(1, 3, 2, 0).contiguous()
+            )  # [B, C, T, F]
+            AFA_output_mag = self.row_norm[i](AFA_output_mag)  # [B, C, T, F]
+
+            ATA_input_mag = (
+                output_mag_i.permute(2, 0, 3, 1).contiguous().view(dim2, b * dim1, -1)
+            )  # [T, B*F, C]
+            ATA_output_mag = self.col_trans[i](
+                ATA_input_mag, src_mask=self.get_mask(ATA_input_mag)
+            )  # [T, B*F, C]
+            ATA_output_mag = (
+                ATA_output_mag.view(dim2, b, dim1, -1).permute(1, 3, 0, 2).contiguous()
+            )  # [B, C, T, F]
+            ATA_output_mag = self.col_norm[i](ATA_output_mag)  # [B, C, T, F]
+            output_mag_i = (
+                input_mag + self.k1 * AFA_output_mag + self.k2 * ATA_output_mag
+            )  # [B, C, T, F]
+            output_mag_i = self.output(output_mag_i)
+            output_list_mag.append(output_mag_i)
+
+            if i >= 1:
+                output_ri_i = output_list_ri[-1] + output_list_mag[-2]
+            else:
+                output_ri_i = input_ri
+            # input_ri_mag = output_ri_i + output_list_mag[-1]
+            AFA_input_ri = (
+                output_ri_i.permute(3, 0, 2, 1).contiguous().view(dim1, b * dim2, -1)
+            )  # [F, B*T, c]
+            AFA_output_ri = self.row_trans[i](AFA_input_ri)  # [F, B*T, c]
+            AFA_output_ri = (
+                AFA_output_ri.view(dim1, b, dim2, -1).permute(1, 3, 2, 0).contiguous()
+            )  # [B, C, T, F]
+            AFA_output_ri = self.row_norm[i](AFA_output_ri)  # [B, C, T, F]
+
+            ATA_input_ri = (
+                output_ri_i.permute(2, 0, 3, 1).contiguous().view(dim2, b * dim1, -1)
+            )  # [T, B*F, C]
+            ATA_output_ri = self.col_trans[i](
+                ATA_input_ri, src_mask=self.get_mask(ATA_input_ri)
+            )  # [T, B*F, C]
+            ATA_output_ri = (
+                ATA_output_ri.view(dim2, b, dim1, -1).permute(1, 3, 0, 2).contiguous()
+            )  # [B, C, T, F]
+            ATA_output_ri = self.col_norm[i](ATA_output_ri)  # [B, C, T, F]
+            output_ri_i = (
+                input_ri + self.k1 * AFA_output_ri + self.k2 * ATA_output_ri
+            )  # [B, C, T, F]
+            output_ri_i = self.output(output_ri_i)
+            output_list_ri.append(output_ri_i)
+
+        del (
+            AFA_input_mag,
+            AFA_output_mag,
+            ATA_input_mag,
+            ATA_output_mag,
+            AFA_input_ri,
+            AFA_output_ri,
+            ATA_input_ri,
+            ATA_output_ri,
+        )
+        # [b, c, dim2, dim1]
+
+        return output_mag_i, output_list_mag, output_ri_i, output_list_ri
+
+
 class AHAM(nn.Module):  # aham merge
     def __init__(self, input_channel=64, kernel_size=(1, 1), bias=True):
         super(AHAM, self).__init__()
@@ -355,8 +496,8 @@ class AHAM_ori(
             x_list.append(x)
             y_list.append(y)
 
-        x_merge = torch.cat((x_list[0], x_list[1], x_list[2], x_list[3]), dim=-1)
-        y_merge = torch.cat((y_list[0], y_list[1], y_list[2], y_list[3]), dim=-2)
+        x_merge = torch.cat(x_list, dim=-1)
+        y_merge = torch.cat(y_list, dim=-2)
 
         y_softmax = self.softmax(y_merge)
         aham = torch.matmul(x_merge, y_softmax)
@@ -699,13 +840,13 @@ class dual_aia_trans_merge_crm(nn.Module):
 
 @tables.register("models", "DB-AIAT-FIG6")
 class dual_aia_trans_merge_crm_fig(nn.Module):
-    def __init__(self, nframe=512, nhop=256):
+    def __init__(self, nframe=512, nhop=256, ch=64, num_layers=4):
         super().__init__()
         self.nbin = nframe // 2 + 1
-        ch_mid = 64
+        ch_mid = ch
         self.en_ri = dense_encoder(3, width=ch_mid, nbin=self.nbin)
         self.en_mag = dense_encoder_mag(width=ch_mid, nbin=self.nbin)
-        self.aia_trans_merge = AIA_Transformer_merge(ch_mid * 2, ch_mid, num_layers=4)
+        self.aia_trans_merge = AIA_Transformer_merge_cau(ch_mid * 2, ch_mid, num_layers=num_layers)
         self.aham = AHAM_ori(input_channel=ch_mid)
         self.aham_mag = AHAM_ori(input_channel=ch_mid)
 
@@ -775,7 +916,7 @@ def numParams(net):
 
 
 if __name__ == "__main__":
-    model = dual_aia_trans_merge_crm_fig()
+    model = dual_aia_trans_merge_crm_fig(num_layers=2)
     model.eval()
     # x = torch.FloatTensor(4, 2, 10, 161)
     x = torch.FloatTensor(1, 16000)

@@ -1,0 +1,10 @@
+md_name: &name db_aiat
+net:
+  _target_: core.aia_trans_official.dual_aia_trans_merge_crm_fig
+  nframe: 512
+  nhop: 256
+  ch: 48
+
+engine:
+  name: *name
+  _target_: core.Trainer_wGAN_for_fig6.TrainerforBaselines

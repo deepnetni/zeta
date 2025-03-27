@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+  - override /model: db_aiat
+  - override /dset: libriDemand
+
+model:
+  net:
+    ch: 48
+    num_layers: 2
+  engine:
+    train_batch_sz: 4
