@@ -572,7 +572,7 @@ class Trainer(EngineGAN):
             self.train_loader,
             ncols=self.ncol,
             leave=True,
-            desc=f"Epoch-{epoch}/{self.epochs}",
+            desc=f"Epoch-{epoch:>2d}/{self.epochs}",
         )
 
         generate_filter_params(self.hasqi_filter_len[0])
@@ -807,7 +807,7 @@ class TrainerforBaselines(Trainer):
             self.train_loader,
             ncols=self.ncol,
             leave=True,
-            desc=f"Epoch-{epoch}/{self.epochs}",
+            desc=f"Epoch-{epoch:>2d}/{self.epochs}",
         )
 
         generate_filter_params(self.hasqi_filter_len[0])
@@ -1310,7 +1310,7 @@ class TrainerCompNetGAN(Trainer):
             self.train_loader,
             ncols=self.ncol,
             leave=True,
-            desc=f"Epoch-{epoch}/{self.epochs}",
+            desc=f"Epoch-{epoch:>2d}/{self.epochs}",
         )
 
         generate_filter_params(119808)
@@ -1565,7 +1565,7 @@ class TrainerforMPSENET(Trainer):
             self.train_loader,
             ncols=self.ncol,
             leave=True,
-            desc=f"Epoch-{epoch}/{self.epochs}",
+            desc=f"Epoch-{epoch:>2d}/{self.epochs}",
         )
 
         generate_filter_params(self.hasqi_filter_len[0])
