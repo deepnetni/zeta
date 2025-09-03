@@ -3,7 +3,10 @@ import soundfile as sf
 import json
 import ast
 
-sys.path.append(__file__.rsplit("/", 2)[0])
+# sys.path.append(__file__.rsplit("/", 2)[0])
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 from utils.HAids.PyHASQI.HASQI_revised import HASQI_v2, HASQI_v2_for_unfixedLen
 from utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation_vad
 

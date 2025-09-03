@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 import librosa
+import pickle
 import soundfile as sf
 
 sys.path.append(str(Path(__file__).parent.parent))
@@ -18,7 +19,7 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 import torch
 import torch.nn as nn
-from models.conv_stft import STFT
+from comps.conv_stft import STFT
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, pad_sequence
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
@@ -91,7 +92,8 @@ class TrunkBasic(Dataset):
         min_len: float = 0.0,
         fs: int = 16000,
         seed: Optional[int] = None,
-        csv_dir: str = __file__.rsplit("/", 3)[0] + "/manifest",
+        # csv_dir: str = __file__.rsplit("/", 3)[0] + "/manifest",
+        csv_dir: Optional[str] = None,
         keymap: Optional[Tuple[str, ...]] = None,
         **kwargs,
     ):
@@ -103,8 +105,13 @@ class TrunkBasic(Dataset):
         self.clean_dir = Path(clean_dirname) if clean_dirname is not None else Path(dirname)
         # self.logger = get_logger(dirname)
         self.logger = get_logger(self.__class__.__name__)
+        # not csv_dir equals to not None and ""
+        csv_dir = str(Path(__file__).resolve().parents[2] / "manifest") if not csv_dir else csv_dir
         self.csv_dir = csv_dir
         self.keymap = keymap
+        self.reSub = kwargs.get("sub", None)
+
+        self.kwargs = kwargs
 
         if flist is None:
             flist = os.path.join(csv_dir, os.path.split(dirname)[-1] + ".csv")
@@ -143,8 +150,12 @@ class TrunkBasic(Dataset):
         )
 
     @property
-    def dirname(self):
+    def dirpath(self):
         return str(self.dir)
+
+    @property
+    def dirname(self):
+        return os.path.split(str(self.dir))[-1]
 
     def _rearange_across_files(self, flist):
         """split audios through wave file length
@@ -176,12 +187,6 @@ class TrunkBasic(Dataset):
                     f_list.append(buffer)
                     buffer = []
                     buffer_len = 0
-
-                    # if idx == 4:
-                    #     for i, f in enumerate(f_list):
-                    #         print(i, f)
-                    #     sys.exit()
-                    # idx += 1
 
                     st += N
                     remain_N -= self.N
@@ -302,13 +307,168 @@ class TrunkBasic(Dataset):
         element = []
         for f_mic in mic_list:
             dirp, f_mic_name = os.path.split(f_mic)
-            f_sph = f_mic_name.replace(*self.keymap) if self.keymap is not None else f_mic_name
+
+            if self.reSub is None:
+                f_sph = f_mic_name.replace(*self.keymap) if self.keymap is not None else f_mic_name
+            else:
+                f_sph = re.sub(self.reSub[0], self.reSub[1], f_mic_name)
+
             f_sph = os.path.join(dirp, f_sph)
             f_sph = f_sph.replace(str(self.dir), str(self.clean_dir))
 
             dsph, _ = audioread(f_sph)
             element.append(((f_mic, f_sph), len(dsph)))
         return element
+
+    def __next__(self) -> Tuple[torch.Tensor, str]:
+        """
+        return: (B,T); fname
+        """
+        if self.pick_idx < len(self.f_list):
+            el = self.f_list[self.pick_idx]
+            f_mic, f_sph = el["f"]
+            # st, ed, pd = el["start"], el["end"], el["pad"]
+
+            d_mic, _ = audioread(f_mic, sub_mean=True)
+            fname = str(Path(f_sph).relative_to(self.clean_dir.parent))
+
+            self.pick_idx += 1
+
+            if self.kwargs.get("next_mic", True):
+                return (
+                    torch.from_numpy(d_mic).float()[None, :],
+                    fname,
+                )
+            else:
+                d_sph, _ = audioread(f_sph, sub_mean=True)
+                return (
+                    torch.from_numpy(d_sph).float()[None, :],
+                    fname,
+                )
+        else:
+            raise StopIteration
+
+    def __getitem__(self, index) -> Tuple[torch.Tensor, torch.Tensor]:
+        el = self.f_list[index]
+        f_mic, f_sph = el["f"]
+        st, ed, pd = el["start"], el["end"], el["pad"]
+
+        d_mic, fs_1 = audioread(f_mic, sub_mean=True)
+        d_sph, fs_2 = audioread(f_sph, sub_mean=True)  # T,2
+        # d_sph, fs_2 = sf.read(f_sph)  # T,2
+        assert fs_1 == fs_2 == 16000
+
+        d_mic = np.pad(d_mic[st:ed], (0, pd), "constant", constant_values=0)
+        # padding inner first
+        d_sph = np.pad(d_sph[st:ed], (0, pd), "constant", constant_values=0)
+
+        return torch.from_numpy(d_mic).float(), torch.from_numpy(d_sph).float()
+
+
+class AFCTrunk(TrunkBasic):
+    def __init__(
+        self,
+        dirname: str,
+        pattern: str = "**/[!.]*.wav",
+        clean_dirname: Optional[str] = None,
+        flist: Optional[str] = None,
+        nlen: float = 0,
+        min_len: float = 0,
+        fs: int = 16000,
+        seed: Optional[int] = None,
+        # csv_dir: str = __file__.rsplit("/", 3)[0] + "/manifest",
+        csv_dir: Optional[str] = None,
+        keymap: Optional[Tuple[str, ...]] = None,
+        **kwargs,
+    ):
+        # fmt: off
+        super().__init__(dirname, pattern, clean_dirname, flist, nlen,
+                        min_len, fs, seed, csv_dir, keymap, **kwargs)
+        # fmt: on
+        rir_dir = kwargs.get("rir_dir", None)
+        assert rir_dir
+        rir_dir = Path(rir_dir)
+        self.rir_list = list(map(str, rir_dir.rglob("*.pkl")))
+        self.logger.info(f"Loading {rir_dir} {len(self.rir_list)} files.")
+        self.unseen = kwargs.get("unseen", False)
+
+    def __getitem__(self, index):
+        el = self.f_list[index]
+        f_mic, f_sph = el["f"]
+        st, ed, pd = el["start"], el["end"], el["pad"]
+
+        d_mic, fs_1 = audioread(f_mic, sub_mean=True)
+        d_sph, fs_2 = audioread(f_sph, sub_mean=True)  # T,2
+        # d_sph, fs_2 = sf.read(f_sph)  # T,2
+        assert fs_1 == fs_2 == 16000
+
+        d_mic = np.pad(d_mic[st:ed], (0, pd), "constant", constant_values=0)
+        # padding inner first
+        d_sph = np.pad(d_sph[st:ed], (0, pd), "constant", constant_values=0)
+
+        if not self.unseen:
+            index_ = index // 4  # each rir_list contains 4 rirs for training
+            with open(self.rir_list[index_ % len(self.rir_list)], "rb") as f:
+                meta = pickle.load(f)
+
+            h = meta["h"][index % 4]
+            G = np.array(meta["gain"][index % 4][0])
+        else:
+            index_ = index // 2  # each rir_list contains 4 rirs for training
+            with open(self.rir_list[index_ % len(self.rir_list)], "rb") as f:
+                meta = pickle.load(f)
+
+            h = meta["h"][index % 2]
+            G = np.array(meta["gain"][index % 2][0])
+        # return torch.from_numpy(d_mic).float(), torch.from_numpy(d_sph).float()
+        return (
+            torch.from_numpy(d_sph).float(),
+            torch.from_numpy(h).float(),
+            torch.from_numpy(G).float().unsqueeze(0),  # shape: ()->(1,)
+        )
+
+    def __next__(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, str]:
+        """
+        return: (B,T); fname
+        """
+        if self.pick_idx < len(self.f_list):
+            el = self.f_list[self.pick_idx]
+            f_mic, f_sph = el["f"]
+            # st, ed, pd = el["start"], el["end"], el["pad"]
+
+            d_mic, _ = audioread(f_mic, sub_mean=True)
+            fname = str(Path(f_sph).relative_to(self.clean_dir.parent))
+
+            self.pick_idx += 1
+
+            if not self.unseen:
+                with open(self.rir_list[(self.pick_idx // 4) % len(self.rir_list)], "rb") as f:
+                    meta = pickle.load(f)
+
+                h = meta["h"][self.pick_idx % 4]
+                G = meta["gain"][self.pick_idx % 4][0]
+            else:
+                with open(self.rir_list[(self.pick_idx // 2) % len(self.rir_list)], "rb") as f:
+                    meta = pickle.load(f)
+
+                h = meta["h"][self.pick_idx % 2]
+                G = meta["gain"][self.pick_idx % 2][0]
+
+            if self.kwargs.get("next_mic", True):
+                return (
+                    torch.from_numpy(d_mic).float()[None, :],
+                    fname,
+                )
+            else:
+                d_sph, _ = audioread(f_sph, sub_mean=True)
+                return (
+                    torch.from_numpy(d_sph).float()[None, :],
+                    torch.from_numpy(h).float()[None, :],
+                    torch.tensor(G).float().unsqueeze(0)[None, :],
+                    fname,
+                )
+        else:
+            raise StopIteration
 
 
 @tables.register("datasets", "FIG6")
@@ -323,7 +483,8 @@ class FIG6Trunk(TrunkBasic):
         min_len: float = 0,
         fs: int = 16000,
         seed: Optional[int] = None,
-        csv_dir: str = __file__.rsplit("/", 3)[0] + "/manifest",
+        # csv_dir: str = __file__.rsplit("/", 3)[0] + "/manifest",
+        csv_dir: Optional[str] = None,
         keymap: Optional[Tuple[str, ...]] = None,
         **kwargs,
     ):
@@ -415,7 +576,8 @@ class FIG6TrunkV2(FIG6Trunk):
         min_len: float = 0,
         fs: int = 16000,
         seed: Optional[int] = None,
-        csv_dir: str = __file__.rsplit("/", 3)[0] + "/manifest",
+        # csv_dir: str = __file__.rsplit("/", 3)[0] + "/manifest",
+        csv_dir: Optional[str] = None,
         keymap: Optional[Tuple[str, ...]] = None,
         **kwargs,
     ):
@@ -453,7 +615,8 @@ class FIG6TrunkV3(FIG6Trunk):
         min_len: float = 0,
         fs: int = 16000,
         seed: Optional[int] = None,
-        csv_dir: str = __file__.rsplit("/", 3)[0] + "/manifest",
+        # csv_dir: str = __file__.rsplit("/", 3)[0] + "/manifest",
+        csv_dir: Optional[str] = None,
         keymap: Optional[Tuple[str, ...]] = None,
         **kwargs,
     ):
@@ -473,20 +636,21 @@ class FIG6TrunkV3(FIG6Trunk):
 
 
 if __name__ == "__main__":
+    pass
     # from torchmetrics.functional.audio import signal_noise_ratio as SDR
 
-    dset = FIG6Trunk(
-        dirname="/home/deepnetni/trunk/dns_wdrc/dev",
-        flist="../manifest/fig6_sig_dev.csv",
-        pattern="[!.]*_nearend.wav",
-        keymap=("nearend.wav", "target.wav"),
-        # vad=True,
-        vad=True,
-    )
+    # dset = FIG6Trunk(
+    #     dirname="/home/deepnetni/trunk/dns_wdrc/dev",
+    #     flist="../manifest/fig6_sig_dev.csv",
+    #     pattern="[!.]*_nearend.wav",
+    #     keymap=("nearend.wav", "target.wav"),
+    #     # vad=True,
+    #     vad=True,
+    # )
 
-    mic, sph, hl = dset[0]
-    print(mic.shape, hl.shape, sph.shape)
-    sys.exit()
+    # mic, sph, hl = dset[0]
+    # print(mic.shape, hl.shape, sph.shape)
+    # sys.exit()
 
     # a = [
     #     (("1.wav", "b.wav"), 10),

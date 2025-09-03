@@ -7,7 +7,10 @@ import torch.nn as nn
 from einops.layers.torch import Rearrange
 from torch import Size, Tensor
 
-sys.path.append(__file__.rsplit("/", 1)[0])
+# sys.path.append(__file__.rsplit("/", 1)[0])
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[0]))
 
 from models.conformer import GLU, FeedForward, PreNorm, Scale
 from models.conv_stft import STFT
@@ -1800,9 +1803,9 @@ if __name__ == "__main__":
     # net = Baseline(512, 256, 48, 2)
     # net = BaselineLinear(512, 256, 48, 2)
     # net = BaselineVAD(512, 256, 48, 2)
-    net = BaselineConditionalConformerVAD8(512, 256, 60, 2)
+    net = BaselineConditionalConformerVAD4(512, 256, 48, 2)
     # net = BaselineConditionalConformerIter(512, 256, 48, 2)
-    # net = BaselineConditionalConformer(512, 256, 48, 2)
+    # net = BaselineConditionalConformerVAD4(512, 256, 48, 2)
     # inp = torch.randn(2, 2, 10, 257)
     # l = HLModule()
     # l(inp, hl)

@@ -11,6 +11,7 @@ train:
       - "target.wav"
   nlen: 5.0
   min_len: 1.0
+
 valid:
   _target_: core.utils.trunk_v2.FIG6Trunk
   dirname: '/home/deepni/datasets/dns_wdrc/dev_vad'

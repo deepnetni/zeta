@@ -9,3 +9,4 @@ net:
 engine:
   name: *name
   _target_: core.Trainer_wGAN_VAD_for_fig6.TrainerVAD
+

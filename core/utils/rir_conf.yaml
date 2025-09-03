@@ -1,0 +1,44 @@
+fs: 16000
+samples: 256                # number of output samples
+noise_num: 1                 # number of noise sources
+
+array:
+  mics: 1                     # number of microphones
+  rirs_per_room: 6              # generating rirs per room
+  SMD_bound: [0.15, 0.2]           # speaker microphone distances. i.e., radius in sphere; or fix value
+  elevation: [0.0, 0.0]         # angle between xy
+  absorption_bound: [0.6, 0.8]  # The absortion coefficient of a material is a number in range (0, 1), e.g., 1 for no reflection.
+  rt60: [0.2, 1.3]              # NOTE: using absortion_bound first if configured both.
+
+  # pos configuration
+  mic_position: "center"          # center: room center + displacement; random: room_xyz * [0, 1)
+  displacement: [-0.5, 0.5]   # next to the place chosen by the `position` item.
+  mic_h: [1.5, 2]                   # heigh of the microphone
+
+  # mtype: "omnidirectional"    # Type of microphone
+  order: 10                   # reflection order
+  orientation: 0              # microphone orientation (rad)
+  hp_filter: True            # enable high-pass filter
+
+
+rooms:
+  normal:
+    l: [5, 10]                # length, m
+    w: [5, 10]                # width, m
+    h: [3, 5]
+    prop: 1.0
+  small:
+    l: [5, 15]
+    w: [5, 15]
+    h: [3, 5]
+    prop: 0.0
+  medium:
+    l: [15, 25]
+    w: [15, 25]
+    h: [3, 4]
+    prop: 0
+  large:
+    l: [25, 30]
+    w: [25, 30]
+    h: [3, 5]
+    prop: 0.0

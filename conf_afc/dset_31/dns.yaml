@@ -1,0 +1,51 @@
+dset_name: dns
+# pclass: core.utils.trunk_v2.FIG6Trunk
+
+train:
+  _target_: core.utils.trunk_v2.AFCTrunk
+  dirname: '/home/deepni/datasets/dnsChallenge/train/noisy'
+  clean_dirname: '/home/deepni/datasets/dnsChallenge/train/clean'
+  flist: "dns_challenge_tr.csv"
+  pattern: '[!.]*.wav'
+  keymap:
+      - "noisy_"
+      - "clean_"
+  nlen: 5.0
+  min_len: 1.0
+  rir_dir: '/home/deepni/datasets/dnsChallenge/gene_rirs'
+
+
+valid:
+  _target_: core.utils.trunk_v2.AFCTrunk
+  dirname: '/home/deepni/datasets/dnsChallenge/dev/noisy'
+  clean_dirname: '/home/deepni/datasets/dnsChallenge/dev/clean'
+  pattern: "**/[!.]*.wav"
+  flist: "dns_challenge_dev.csv"
+  keymap:
+      - "noisy_"
+      - "clean_"
+  rir_dir: '/home/deepni/datasets/dnsChallenge/gene_rirs'
+
+vtest:
+  _target_: core.utils.trunk_v2.AFCTrunk
+  dirname: '/home/deepni/datasets/dnsChallenge/test/no_reverb/noisy'
+  clean_dirname: '/home/deepni/datasets/dnsChallenge/test/no_reverb/clean'
+  pattern: "**/[!.]*.wav"
+  flist: "dns_challenge_test.csv"
+  # keymap:
+  #     - "nearend.wav"
+  #     - "target.wav"
+  sub:
+    - '.*(fileid_.*)\.wav'
+    - 'clean_\1.wav'
+  rir_dir: '/home/deepni/datasets/dnsChallenge/gene_rirs'
+  unseen: True
+
+vpred:
+  _target_: core.utils.trunk_v2.AFCTrunk
+  dirname: '/home/deepni/datasets/dnsChallenge/dev/noisy'
+  clean_dirname: '/home/deepni/datasets/dnsChallenge/dev/clean'
+  pattern: "**/[!.]*.wav"
+  flist: "dns_challenge_dev.csv"
+  next_mic: False
+  rir_dir: '/home/deepni/datasets/dnsChallenge/gene_rirs'

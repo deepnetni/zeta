@@ -1,6 +1,7 @@
 defaults:
   - _self_
-  - dset: libriDemand
+  # - dset: libriDemand
+  - dset: dns
   - loss: basic
   - model: joint
   - override hydra/hydra_logging: none
@@ -23,6 +24,7 @@ model:
     valid_per_epoch: 1
     vtest_per_epoch: 1
     dsets_raw_metrics: "dset_metrics.json"
+    ncol: 200
 
     train_batch_sz: 6
     train_num_workers: 16
@@ -39,15 +41,24 @@ model:
     loss_list: ${loss}
 
     net_D:
-        _target_: core.rebuild.FTCRN.Discriminator
-        ndf: 16
+      _target_: core.rebuild.FTCRN.Discriminator
+      ndf: 16
 
     train_dset: ${dset.train}
     valid_dset: ${dset.valid}
     vtest_dset: ${dset.vtest}
     dset_collate_fn:
-        # _target_: core.Trainer_wGAN_for_fig6.pad_to_longest
-        _target_: core.Trainer_wGAN_for_fig6.get_pad_func
+      # _target_: core.Trainer_wGAN_for_fig6.pad_to_longest
+      _target_: core.Trainer_wGAN_for_fig6.get_pad_func
+
+  predictor:
+    _target_: core.Trainer_wGAN_for_fig6.PredictorVAD
+    name: ${model.md_name}
+    net: ${model.net}
+    ckpt: 25
+    dset: ${dset.vtest}
+    info_dir: ${model.engine.info_dir}
+
 
 valid_first: False
 vtest_first: False

@@ -1,16 +1,21 @@
+import abc
 import json
 import os
 import random
+from collections import Counter
 from itertools import repeat
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, cast
 
 import matplotlib
-from torch.utils.data import DataLoader, Dataset
 from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data import DataLoader, Dataset
+from torchmetrics.functional.audio.sdr import signal_distortion_ratio as SDR
+from tqdm import tqdm
 
-
-from .models.conv_stft import STFT
+from comps.conv_stft import STFT
+from utils.audiolib import audiowrite
+from utils.trunk_v2 import TrunkBasic
 
 # import re
 # from collections import Counter
@@ -21,6 +26,17 @@ matplotlib.use("Agg")
 import numpy as np
 import torch
 import torch.nn as nn
+
+
+class Status:
+    def __init__(self, msg):
+        self.msg = msg
+
+    def __enter__(self):
+        print(self.msg, end="", flush=True)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        print("\r" + " " * len(self.msg), end="\r", flush=True)
 
 
 def setup_seed(seed: int = 0):
@@ -149,6 +165,42 @@ class _EngOpts(object):
                 out.setdefault(k, []).append(v)
         return {k: np.array(v) for k, v in out.items()}  # {"pesq":,"csig":,"cbak","cvol"}
 
+    def merge_metric(self, *args, **kwargs):
+        """
+        - Params:
+            args: dict, a,b,c,d,...
+            kwarge: tag, ...
+            - tag: [ta,tb, ...]
+
+        - Example
+            {'a':x, 'b':y}, {'a':z, 'b':k}, tags=('na', 'nb')
+            return {'a':{'na':x, 'nb':z}, 'b': {'na':y, 'nb':k}}
+
+
+            if {'a':{...}, 'b':{...}}, {'a':{...}}, then
+            return {'a_t1':{...}, 'a_t2':{...}, 'b':{...}}
+        """
+        tag_l = kwargs.get("tags", None)
+        assert tag_l is None or len(tag_l) == len(args)
+        keys_count = Counter(k for d in args for k in d)
+
+        state_dict = {}
+        for idx, meta in enumerate(args):
+            for k, v in meta.items():
+                # print(idx, k, v)
+                if k not in state_dict and keys_count[k] == 1:
+                    state_dict.setdefault(k, v)
+                else:
+                    t = idx if not tag_l else tag_l[idx]
+                    if not isinstance(v, dict):
+                        state_dict.setdefault(k, {}).update({t: v})
+                    else:
+                        # state_dict.setdefault(k, {}).update({f"{k}_{t}": v})
+                        state_dict.setdefault(f"{k}_{t}", v)
+                # print(state_dict)
+
+        return state_dict
+
 
 def pad_to_longest_each_element(batch):
     """
@@ -201,6 +253,8 @@ class Engine(_EngOpts):
 
         collate_fn = kwargs.get("dset_collate_fn", pad_to_longest_each_element)
 
+        self.kwargs = kwargs
+
         self.train_loader = DataLoader(
             train_dset,
             batch_size=kwargs.get("train_batch_sz", 6),
@@ -209,6 +263,7 @@ class Engine(_EngOpts):
             shuffle=True,
             worker_init_fn=self._worker_set_seed,
             generator=self._set_generator(),
+            drop_last=True,
         )
         self.train_dset = train_dset
         # g = torch.Generator()
@@ -223,6 +278,7 @@ class Engine(_EngOpts):
             generator=self._set_generator(),
             collate_fn=collate_fn,
             # generator=g,
+            drop_last=True,
         )
         self.valid_dset = valid_dset
 
@@ -236,6 +292,7 @@ class Engine(_EngOpts):
             generator=self._set_generator(),
             collate_fn=collate_fn,
             # generator=g,
+            drop_last=True,
         )
         # vtest_dset = cast(TrunkBasic, vtest_dset)
         self.vtest_dset = vtest_dset
@@ -246,9 +303,9 @@ class Engine(_EngOpts):
             self.vpred_dset = vpred_dset
 
         # loss_dict: {}
-        self.loss_list = kwargs.get("loss_list", [])
-        for loss_dict in self.loss_list:
-            assert "func" in loss_dict, f"loss {loss_dict} func is None"
+        self.loss_list = kwargs.get("loss_list", {})
+        for l_name, loss_dict in self.loss_list.items():
+            assert "func" in loss_dict, f"loss {l_name} func is None"
             loss_dict["func"].cuda()
             loss_dict["func"].eval()
 
@@ -273,10 +330,10 @@ class Engine(_EngOpts):
                 if info_dir != ""
                 else Path(__file__).parent.parent / "trained"
             )
-        log.info(f"info dirname: {self.info_dir}")
 
-        name = name if root_save_dir is None or root_save_dir == "" else root_save_dir
+        name = name if not root_save_dir else root_save_dir
         self.base_dir = self.info_dir / name
+        log.info(f"\033[92minfo dirname: {self.base_dir}\033[0m")
         self.ckpt_dir = self.info_dir / name / "checkpoints"
         self.ckpt_file = self.ckpt_dir / "ckpt.pth"
         self.ckpt_best_file = self.ckpt_dir / "best.pth"
@@ -305,6 +362,8 @@ class Engine(_EngOpts):
 
         self.stft = STFT(512, 256).cuda()
 
+        self.raw_metrics = self._load_dsets_metrics(self.dsets_mfile)
+
     @property
     def baseDir(self):
         return str(self.base_dir)
@@ -323,6 +382,17 @@ class Engine(_EngOpts):
         return g
 
     @staticmethod
+    def flatten_dict(d, parent_key="", sep="_"):
+        items = {}
+        for k, v in d.items():
+            new_key = f"{parent_key}{sep}{k}" if parent_key else k
+            if isinstance(v, dict):
+                items.update(Engine.flatten_dict(v, new_key, sep=sep))
+            else:
+                items[new_key] = v
+        return items
+
+    @staticmethod
     def pbar_postfix_color(pbar, show: Dict, color: str = "green"):
         cmap = dict(
             red="\033[91m",
@@ -330,6 +400,7 @@ class Engine(_EngOpts):
             yellow="\033[93m",
             reset="\033[0m",
         )
+        show = Engine.flatten_dict(show)
         pbar.set_postfix_str(
             ", ".join(f"{cmap[color]}{k}={v:>.3f}{cmap['reset']}" for k, v in show.items())
         )
@@ -341,9 +412,12 @@ class Engine(_EngOpts):
 
         sph_xk, enh_xk = None, None
 
-        for item in self.loss_list:
-            name = item["name"]
+        for name, item in self.loss_list.items():
+            # name = item["name"]
             weight = item.get("w", 1.0)
+
+            if weight == 0:
+                continue
 
             if item["func"].domain == "time":
                 ret = item["func"](sph, enh)
@@ -366,23 +440,80 @@ class Engine(_EngOpts):
         # loss_dict.update({"loss": loss})
         return dict(loss=loss, **loss_dict)
 
+    def valid_fn_list(self, sph, enh, nlen_list, ret_loss: bool = True) -> Dict:
+        nB = sph.size(0)
+        # `numel()` return the total number of elements in a Tensor
+        if nlen_list.unique().numel() == 1:
+            sph = sph[..., : nlen_list[0]]
+            enh = enh[..., : nlen_list[0]]
+            np_l_sph = sph.cpu().numpy()
+            np_l_enh = enh.cpu().numpy()
+
+            sisnr_sc = self._si_snr(sph, enh).mean()
+            sdr_sc = SDR(preds=enh, target=sph).mean().item()
+        else:
+            sisnr_l = []
+            sdr_l = []
+            np_l_enh, np_l_sph = [], []
+
+            sisnr_sc, sdr_sc = 0, 0
+            for i in range(nB):
+                sph_ = sph[i, : nlen_list[i]]  # B,T
+                enh_ = enh[i, : nlen_list[i]]
+                np_l_sph.append(sph_.cpu().numpy())
+                np_l_enh.append(enh_.cpu().numpy())
+
+                sisnr_l.append(self._si_snr(sph_.cpu().numpy(), enh_.cpu().numpy()))
+                sdr_l.append(SDR(preds=enh_, target=sph_).cpu().numpy())
+            sisnr_sc = np.array(sisnr_l).mean()
+            sdr_sc = np.array(sdr_l).mean()
+
+        pesq_wb_sc = self._pesq(np_l_sph, np_l_enh, fs=16000).mean()
+        pesq_nb_sc = self._pesq(np_l_sph, np_l_enh, fs=16000, mode="nb").mean()
+        stoi_sc = self._stoi(np_l_sph, np_l_enh, fs=16000).mean()
+
+        state = {
+            "pesq_wb": pesq_wb_sc,
+            "pesq_nb": pesq_nb_sc,
+            "si-snr": sisnr_sc,
+            "sdr": sdr_sc,
+            "stoi": stoi_sc,
+        }
+
+        if ret_loss:
+            N = nlen_list.min()
+            loss_dict = self.loss_fn_list(sph[..., :N], enh[..., :N])
+        else:
+            loss_dict = {}
+
+        return dict(state, vloss={k: v.item() for k, v in loss_dict.items()})
+
     def fit(self):
         for i in range(self.start_epoch, self.epochs + 1):
             if self.valid_first is False and self.vtest_first is False:
                 self.net.train()
 
                 loss = self._fit_each_epoch(i)
+                torch.cuda.empty_cache()
                 self.scheduler.step()
                 self._print("Loss", loss, i)
                 self._save_ckpt(i, is_best=False)
-            self.prediction_per_epoch(i)
+
+            with Status("Predicting ..."):
+                self.prediction_per_epoch(i)
 
             self.valid_first = False
             if not self.vtest_first and self.valid_per_epoch != 0 and i % self.valid_per_epoch == 0:
                 self.net.eval()
                 score: Dict = self._valid_each_epoch(i)
-                vloss = score.pop("vloss", None)
-                self._print("zEvaLoss", vloss, i) if vloss is not None else None
+
+                # vloss_vals = {k: score.pop(k) for k in list(score.keys()) if k.startswith("vloss")}
+                # self._print("zEvaLoss", vloss_vals, i)
+
+                vloss_keys = [k for k in score.keys() if k.startswith("vloss")]
+                for k in vloss_keys:
+                    vloss = score.pop(k)
+                    self._print(f"zEval_{k}", vloss, i)
                 self._print("Eval", score, i)
                 if "score" in score and score["score"] > self.best_score:
                     self.best_score = score["score"]
@@ -395,8 +526,10 @@ class Engine(_EngOpts):
                 for name, score in scores.items():
                     out = ""
                     # score {"-5":{"pesq":v,"stoi":v},"0":{...}}
-                    vloss = score.pop("vloss", None)
-                    self._print(f"zTest-{name}-Loss", vloss, i) if vloss is not None else None
+                    vloss_keys = [k for k in score.keys() if k.startswith("vloss")]
+                    for k in vloss_keys:
+                        vloss = score.pop(k)
+                        self._print(f"zTest-{name}-Loss", vloss, i)
 
                     for k, v in score.items():
                         out += f"{k}:{v} " + "\n"
@@ -531,11 +664,6 @@ class Engine(_EngOpts):
         if is_best:
             torch.save(self.net.state_dict(), self.ckpt_best_file)
         else:
-            # torch.save(
-            #     self.net.state_dict(),
-            #     self.ckpt_dir / f"epoch_{str(epoch).zfill(4)}.pth",
-            # )
-
             state_dict = {
                 "epoch": epoch,
                 "best_score": self.best_score,
@@ -547,8 +675,13 @@ class Engine(_EngOpts):
             torch.save(state_dict, self.ckpt_file)
             torch.save(state_dict, self.ckpt_dir / f"epoch_{str(epoch).zfill(4)}.pth")
 
-    def _load_ckpt(self):
-        ckpt = torch.load(self.ckpt_file, map_location=self.device)
+    def _load_ckpt(self, epoch=None):
+        if not epoch:  # epoch is None
+            ckpt = torch.load(self.ckpt_file, map_location=self.device)
+        else:
+            ckpt_file = self.ckpt_dir / f"epoch_{str(epoch).zfill(4)}.pth"
+            log.info(f"Loading {ckpt_file}")
+            ckpt = torch.load(ckpt_file, map_location=self.device)
 
         if self.valid_first or self.vtest_first:
             self.start_epoch = ckpt["epoch"]
@@ -575,45 +708,61 @@ class Engine(_EngOpts):
     def post_save_ckpt(self, ckpt_dict):
         return ckpt_dict
 
-    def prediction_per_epoch(self, epoch):
-        self.net.eval()
-        return str(self.epoch_pred_dir / str(epoch))
+    def eval_epoch(self, epoch: int | List):
+        """Validate a given epoch ckpt result."""
+        if isinstance(epoch, List):
+            score = {}
+            for i in epoch:
+                self._load_ckpt(i)
+                ret: Dict = self._valid_each_epoch(i)
+                score.update({i: ret})
+        else:
+            self._load_ckpt(epoch)
+            score: Dict = self._valid_each_epoch(epoch)
 
+        return score
+
+    @abc.abstractmethod
     def _net_flops(self) -> int:
         # from thop import profile
         # import copy
         # x = torch.randn(1, 16000)
         # flops, _ = profile(copy.deepcopy(self.net), inputs=(x,), verbose=False)
         # return flops
-        raise NotImplementedError
+        pass
+        # raise NotImplementedError
 
     def _valid_dsets(self) -> Dict:
         """return metrics of valid & test dataset
         Return:
             {'valid':{"pesq":xx, "STOI":xx,...}, "test":{...}}
         """
+        print("!! valid dset funsion not defined.")
         return {}
-        # return {"loss": 0}
 
-    # def config_optimizer(self) -> Optimizer:
-    #     """
-    #     define the optimizer in the class,
-    #     System will use the default implementation `_config_optimzer` if this API is not implemented.
-    #     """
-    #     raise NotImplementedError
+    def prediction_per_epoch(self, epoch):
+        self.net.eval()
+        return str(self.epoch_pred_dir / str(epoch))
 
+    @abc.abstractmethod
     def _fit_each_epoch(self, epoch: int) -> Dict:
-        raise NotImplementedError
+        pass
+        # raise NotImplementedError
         # return {"loss": 0}
 
+    @abc.abstractmethod
     def _valid_each_epoch(self, epoch: int) -> Dict:
-        raise NotImplementedError
+        pass
+        # raise NotImplementedError
         # return {"score": 0}
 
+    @abc.abstractmethod
     def _vtest_each_epoch(self, epoch: int) -> Dict[str, Dict[str, Dict]]:
-        # {"dir1":{"metric":v,..}, "d2":{..}}
-        # or {"dir1":{"subd1":{"metric":v,...},"sub2":{...}}, "dir2":{...}}
-        raise NotImplementedError
+        """
+        {"dir1":{"metric":v,..}, "d2":{..}} or
+        {"dir1":{"subd1":{"metric":v,...},"sub2":{...}}, "dir2":{...}}
+        """
+        pass
 
 
 class EngineGAN(Engine):
@@ -644,7 +793,8 @@ class EngineGAN(Engine):
         # fmt: off
         super().__init__(name, train_dset, valid_dset, vtest_dset, net, epochs,
             desc, info_dir, resume, optimizer_name, scheduler_name, seed, valid_per_epoch,
-            vtest_per_epoch, valid_first, dsets_raw_metrics, root_save_dir, vpred_dset, *args, **kwargs,
+            vtest_per_epoch, valid_first, dsets_raw_metrics, root_save_dir, vpred_dset,
+            *args, **kwargs,
         )
         # fmt: on
 
@@ -714,5 +864,78 @@ class EngineGAN(Engine):
                     self._print(f"Test-{name}", score, i)
 
 
+class PredEngine(object):
+    def __init__(
+        self, name, net: nn.Module, ckpt: str, dset: Dataset, info_dir: str = "", fs=16000, **kwargs
+    ) -> None:
+        """Predictor engine, revised the run API if unavilable.
+
+        :param net:
+        :param ckpt: str type for the epoch, or abs path for the specific checkpoint.
+        :param dset:
+        :param info_dir: the directory of the trained results.
+        :param fs:
+        :returns:
+
+        """
+        root_save_dir = kwargs.get("root_save_dir", "")
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.net: nn.Module = net
+        # self.dset: TrunkBasic = dset
+        self.dset: TrunkBasic = cast(TrunkBasic, dset)
+        # not root_save_dir, [], {}, None, 0, False, ""
+        name = name if not root_save_dir else root_save_dir
+        self.info_dir = Path(info_dir) / name
+        # self.fout_dir = self.info_dir / "output"
+        self.fout_dir = self.info_dir / "output"
+        log.info(f"\033[92mpred dirname: {self.fout_dir/ self.dset.dirname}\033[0m")
+        self.ckpt = str(ckpt) if isinstance(ckpt, int) else ckpt
+        self.fs = fs
+
+        self.load_ckpt()
+
+    def load_ckpt(self):
+        if os.path.isabs(self.ckpt) and os.path.isfile(self.ckpt):
+            ckpt_f = self.ckpt
+        else:
+            ckpt_f = self.info_dir / "checkpoints" / f"epoch_{self.ckpt:0>4}.pth"
+        log.info(f"\033[92mload ckpt: {ckpt_f}\033[0m")
+
+        # print(ckpt_f, "@@@")
+        self.net.load_state_dict(torch.load(ckpt_f)["net"])
+        self.net.to(self.device)
+        self.net.eval()
+
+    def run(self):
+        """
+        revise if not suitable.
+        """
+        pbar = tqdm(self.dset, ncols=100)
+        for mic, fname in pbar:
+            mic = mic.cuda()
+
+            fout = os.path.join(str(self.fout_dir), fname)
+
+            with torch.no_grad():
+                enh = self.net(mic)
+
+            enh = enh.cpu().detach().squeeze().numpy()
+            audiowrite(fout, enh, sample_rate=self.fs)
+
+            # try:
+            # outd = os.path.dirname(fout)
+            # except
+
+
 if __name__ == "__main__":
-    pass
+    i = {"a": 1, "b": 2, "c": 3}
+    j = {"b": 22, "c": 33}
+    k = {"e": {"1": 1, "2": 2}, "f": {"3": 4}}
+    l = {"e": {"1": 3, "2": 4}, "f": {"3": 4}}
+
+    obj = _EngOpts()
+    # met = obj.merge_metric(i, j, tags=("ii", "jj"))
+    met = obj.merge_metric(i, j, k, l, tags=("ii", "jj", "kk", "ll"))
+    # print(met)
+    met = Engine.flatten_dict(met)
+    print(met)

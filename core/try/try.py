@@ -4,21 +4,11 @@ import torch.nn.functional as F
 import numpy as np
 
 
-class A:
-    def __init__(self) -> None:
-        self.b()
+a = np.array([1, 2, 3, 4, 5]) + 3
 
-    @staticmethod
-    def a():
-        print("a")
+b = np.argwhere(a > 6).squeeze()
+print(b)
 
 
-class B(A):
-    def __init__(self) -> None:
-        super().__init__()
-
-    def b(self):
-        print("b")
-
-
-b = B()
+b = np.flatnonzero(a > 6)
+print(b)

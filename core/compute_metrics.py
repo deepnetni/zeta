@@ -48,7 +48,7 @@ def parse():
     # parser.add_argument("--same", help="", default=False)
     parser.add_argument("--pattern", help="noisy files", default=r"^(?!\.).*\.wav$")
 
-    parser.add_argument("--out", help="dst file or directory", type=str)
+    parser.add_argument("--out", help="dst file or directory", type=str, default=None)
     parser.add_argument("--fs", help="dst file or directory", type=int, default=16000)
 
     # metrics
@@ -63,6 +63,11 @@ def parse():
     parser.add_argument("--hasqi", help="hasqi", action="store_true")
     parser.add_argument("--metrics", help="compute multi-metrics", nargs="+", default=[])
 
+    parser.add_argument("--merge", help="merge excls files", nargs="+", default=[])
+    parser.add_argument(
+        "--tag", help="column name for each merge excls files", nargs="+", default=[]
+    )
+
     # output
     parser.add_argument("--excel", help="excel name", default=None)
 
@@ -73,15 +78,10 @@ def parse():
     # the output folder contain multi-types
     args = parser.parse_args()
 
-    # if args.src is not None:
-    args.src = os.path.abspath(args.src)
-    # elif args.src_spec is not None:
-    #     args.src_spec = os.path.abspath(args.src_spec)
-    # args.same = True
-    # else:
-    #     raise RuntimeError(f"src or src_spec must configure one.")
-
-    args.out = os.path.abspath(args.out)
+    if args.src is not None:
+        args.src = os.path.abspath(args.src)
+    if args.out is not None:
+        args.out = os.path.abspath(args.out)
 
     return args
 
@@ -89,6 +89,7 @@ def parse():
 def save_excel(fname: str, data: Dict[str, Dict]):
     """
     data:{'caf': {'pesq':np.array, 'stoi':np.array, ...}, 'bus':{...}, ...}
+    sheet_name: {'col': data, 'col':data}
     """
 
     with pd.ExcelWriter(fname) as writer:
@@ -247,6 +248,26 @@ def sort_key(key):
     return ret
 
 
+def merge_excels_files(fout, *args):
+    """merge multi-xlsx files.
+
+    :param fout:
+    :param args: (xlsx, tag)
+    :returns:
+
+    """
+    store = {}
+    for exf, tag in args:
+        if tag is None:
+            _, fname = os.path.split(exf)
+            tag = fname.split(".")[0]
+        df = pd.read_excel(exf, index_col=None)
+        for sheet_name in list(df.columns):
+            store.setdefault(sheet_name, {}).update({f"{tag}": np.array(df[sheet_name].values)})
+
+    save_excel(fout, store)
+
+
 if __name__ == "__main__":
     """
     python compute_metrics.py --out ../trained_mcse_spdns/pred_mcse_50/test --src ~/datasets/spatialReverbNoise/test --map target.wav mic.wav --pesq
@@ -257,7 +278,16 @@ if __name__ == "__main__":
     args = parse()
 
     score = {}
-    if os.path.isfile(args.out):
+    if args.merge != []:
+        fout = "out.xlsx" if args.out is None else args.out
+        if args.tag != []:
+            assert len(args.tag) == len(args.merge)
+            f = [(xf, t) for xf, t in zip(args.merge, args.tag)]
+        else:
+            f = [(xf, None) for xf in args.merge]
+        # f = [(xf, t if args.tag != [] else None) for xf, t in zip(args.merge, args.tag)]
+        merge_excels_files(fout, *f)
+    elif os.path.isfile(args.out):
         score_l = compute_score([args.src], [args.out], args=args)
         score = pack_metrics(score_l, args.metrics)  # {'m1': np.array, 'm2':..}
 

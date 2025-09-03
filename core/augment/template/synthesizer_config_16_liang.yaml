@@ -1,10 +1,10 @@
 # Datagen parameters
-onlinesynth_duration: 6
-onlinesynth_sampling_rate: 16000
+onlinesynth_duration: 5
+onlinesynth_sampling_rate: 48000
 onlinesynth_resampling_type: fft  # resampling type if input file has sr != onlinesynth_sampling_rate
 onlinesynth_nearend_prop_noisy: 0.7  # Percentage of nearend files which are altered with noise
 onlinesynth_nearend_snr_interval: [ -5, 15 ]  # SNR (in dB) interval for nearend files affected by noise
-onlinesynth_nearend_prop_add_gaussian_ne_noise: 0.7  # Percentage of additional Gaussian noise added over existing noise
+onlinesynth_nearend_prop_add_gaussian_ne_noise: 0.0  # Percentage of additional Gaussian noise added over existing noise
 
 onlinesynth_nearend_apply_gain_change: 0.0  # Probability to apply random gain change in nearend signal
 #onlinesynth_nearend_normalize_volume: -27  # dB level for nearend / target volume normalization. Comment if no normalization is desired
@@ -14,20 +14,22 @@ onlinesynth_nearend_apply_gain_change: 0.0  # Probability to apply random gain c
 onlinesynth_nearend_datasets:
   dns:
     weight: 1.0
-    dir: '/home/deepni/disk/DNS-Challenge/datasets/clean'
+    #dir: '/home/deepni/disk/DNS-Challenge/datasets/clean'
+    dir: '/home/deepni/disk/ArchiveDataset/ears_dataset_48k/DATASET'
 
 onlinesynth_nearend_noises:
   dns_challenge:
-    weight: 0.4
-    dir: '/home/deepni/disk/DNS-Challenge/datasets/noise'
+    weight: 1.0
+    #dir: '/home/deepni/disk/DNS-Challenge/datasets/noise'
+    dir: '/home/deepni/disk/ArchiveDataset/DNS-Challenges/DNS-4/noise_fullband'
   noise_92:
-    weight: 0.2
+    weight: 0.0
     dir: '/home/deepni/disk/noise_92'
   noise_wind:
-    weight: 0.2
+    weight: 0.0
     dir: '/home/deepni/disk/wind_ch0'
   noise_clap:
-    weight: 0.2
+    weight: 0.0
     dir: '/home/deepni/disk/noisy_clap_clips'
 
 # onlinesynth_nearend_noises:
@@ -40,7 +42,7 @@ onlinesynth_nearend_noises:
 
 onlinesynth_self_record_noises:
   dns_challenge:
-    weight: 1.0
+    weight: 0.0
     dir: '/home/deepni/datasets/new423_liang_bg_noise'
 
 

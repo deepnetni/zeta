@@ -1,0 +1,32 @@
+dset_name: libriDemand
+
+train:
+  _target_: core.utils.trunk_v2.FIG6Trunk
+  dirname: '/home/deepnetni/trunk/dns_wdrc/libri_demand_train_100'
+  flist: "fig6_libridemand_train.csv"
+  pattern: '[!.]*_nearend.wav'
+  keymap:
+      - "nearend.wav"
+      - "target.wav"
+  nlen: 5.0
+  min_len: 1.0
+  # return_clean: True
+  # vad: True
+valid:
+  _target_: core.utils.trunk_v2.FIG6Trunk
+  dirname: '/home/deepnetni/trunk/dns_wdrc/libri_demand_dev'
+  flist: "fig6_libridemand_valid.csv"
+  pattern: "**/[!.]*_nearend.wav"
+  keymap:
+      - "nearend.wav"
+      - "target.wav"
+  # vad: True
+vtest:
+  _target_: core.utils.trunk_v2.FIG6Trunk
+  dirname: '/home/deepnetni/trunk/dns_wdrc/libri_demand_test'
+  flist: "fig6_libridemand_test.csv"
+  pattern: "**/[!.]*_nearend.wav"
+  keymap:
+      - "nearend.wav"
+      - "target.wav"
+  # vad: True

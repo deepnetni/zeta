@@ -11,7 +11,8 @@ cmd = f"python core/compute_metrics.py"
 # src = "~/trunk/dns_wdrc"
 # src = "~/datasets/dns_wdrc"
 # src = "~/datasets/dns_wdrc/test_noise92"
-src = "~/datasets/dns_wdrc/dns_testset_noverb"
+# src = "~/datasets/dns_wdrc/dns_testset_noverb"
+src = "~/datasets/dns_wdrc/libri_demand_test"
 _, dname = os.path.split(src)
 
 metrics = "hasqi pesqw pesqn sdr sisnr stoi"
@@ -28,8 +29,8 @@ md_name = [
     # "baseline_fig6_vad",
     # "condConformer",
     # "IterCondConformer",
-    "condConformerVAD_mc36"
-    # "condConformerVAD8_mc36"
+    "condConformerVAD_mc36",
+    # "condConformerVAD8_mc36",
     # "condConformerVAD",
     # "condConformerVAD8_mc48"
     # "condConformerVAD_mc60"
@@ -40,13 +41,19 @@ md_name = [
     # "FTCRN_COND",
     # "FTCRN_VAD",
     # "FTCRN_COND_Iter",
+    #
+    "db_aiat",
+    "MP_SENet",
+    "FSPEN",
+    "SEMamba",
+    "PrimeKNet",
 ]
 
 
 for m in md_name:
     cprint.r(m)
-    # out = f"~/model_results_trunk/FIG6/fig6_GAN/{m}/output"
-    out = f"~/model_results_trunk/FIG6/fig6_GAN/{m}/output/{dname}"
+    # out = f"~/model_results_trunk/FIG6/fig6_GAN/{m}/output/{dname}"
+    out = f"~/model_results_trunk/FIG6/fig6_GAN_libriDemand/{m}/output/{dname}"
     # out = f"~/model_results_trunk/FIG6/fig6_GAN/{m}/output/dns_testset_noverb"
     try:
         call(

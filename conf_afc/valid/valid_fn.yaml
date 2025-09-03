@@ -1,0 +1,4 @@
+- name: SDR
+  domain: torch
+  func:
+    _target_: torchmetrics.functional.audio.sdr.signal_distortion_ratio

@@ -8,7 +8,10 @@ from core.utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation, FIG6_compensation_
 import soundfile
 import numpy as np
 
-print(__file__, __file__.rsplit("/", 2))
+# print(__file__, __file__.rsplit("/", 2))
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 
 if __name__ == "__main__":

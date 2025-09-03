@@ -1,0 +1,31 @@
+dset_name: dns
+# pclass: core.utils.trunk_v2.FIG6Trunk
+
+train:
+  _target_: core.utils.trunk_v2.FIG6Trunk
+  dirname: '/home/deepni/datasets/dns_wdrc/train_100'
+  flist: "fig6_sig_train_100.csv"
+  pattern: '[!.]*_nearend.wav'
+  keymap:
+      - "nearend.wav"
+      - "target.wav"
+  nlen: 5.0
+  min_len: 1.0
+
+valid:
+  _target_: core.utils.trunk_v2.FIG6Trunk
+  dirname: '/home/deepni/datasets/dns_wdrc/dev_vad'
+  pattern: "**/[!.]*_nearend.wav"
+  flist: "fig6_sig_dev_vad.csv"
+  keymap:
+      - "nearend.wav"
+      - "target.wav"
+
+vtest:
+  _target_: core.utils.trunk_v2.FIG6Trunk
+  dirname: '/home/deepni/datasets/dns_wdrc/dns_testset_noverb'
+  pattern: "**/[!.]*_nearend.wav"
+  flist: "fig6_sig_dns_test.csv"
+  keymap:
+      - "nearend.wav"
+      - "target.wav"

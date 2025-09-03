@@ -1,0 +1,66 @@
+defaults:
+  - _self_
+  - dset: dns
+  - loss: basic
+  - model: joint
+  - override hydra/hydra_logging: none
+  - override hydra/job_logging: none
+
+model:
+  engine:
+    _target_: core.Trainer_wGAN_VAD_for_fig6.TrainerVAD
+    name: null
+    desc: ""
+    info_dir: "${oc.env:HOME}/model_results_trunk/AFS/HS_GAN"
+    resume: True
+    optimizer_name: "adam"
+    lr: 5e-4
+    epochs: 25
+    scheduler_name: "stepLR"
+    step_size: 10
+    gamma: 0.5
+    fs: 16000
+    valid_per_epoch: 1
+    vtest_per_epoch: 1
+    dsets_raw_metrics: "dset_metrics.json"
+    ncol: 200
+
+    train_batch_sz: 6
+    train_num_workers: 16
+    valid_batch_sz: 8
+    valid_num_workers: 16
+    vtest_batch_sz: 8
+    vtest_num_workers: 16
+
+    valid_first: ${valid_first}
+    vtest_first: ${vtest_first}
+    root_save_dir: ${root_save_dir}
+
+    net: ${model.net}
+    loss_list: ${loss}
+
+    net_D:
+      _target_: core.rebuild.FTCRN.Discriminator
+      ndf: 16
+
+    train_dset: ${dset.train}
+    valid_dset: ${dset.valid}
+    vtest_dset: ${dset.vtest}
+    dset_collate_fn:
+      # _target_: core.Trainer_wGAN_for_fig6.pad_to_longest
+      _target_: core.Trainer_wGAN_for_fig6.get_pad_func
+
+  predictor:
+    _target_: core.Trainer_wGAN_for_fig6.PredictorVAD
+    name: ${model.md_name}
+    net: ${model.net}
+    ckpt: 25
+    dset: ${dset.vtest}
+    info_dir: ${model.engine.info_dir}
+
+
+valid_first: False
+vtest_first: False
+root_save_dir: null
+
+pred: False

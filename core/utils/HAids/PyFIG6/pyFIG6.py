@@ -1,11 +1,11 @@
 import sys
 
 sys.path.append(__file__.rsplit("/", 4)[0])
-
 import numpy as np
 from librosa import istft, stft
 from scipy.interpolate import interp1d
 from scipy.signal import get_window
+from scripts.draw import draw_file
 from utils.vad import VAD
 
 
@@ -379,12 +379,17 @@ def FIG6_compensation_vad(
 
 if __name__ == "__main__":
     import soundfile as sf
+    from matplotlib import pyplot as plt
 
     HL = [50, 60, 70, 75, 85, 95]
     # src = np.random.randn(1600)
     # src = np.ones(1600)
-    src, fs = sf.read("/home/deepni/datasets/dns_wdrc/test/0_enlarge_nearend.wav")
-    out = FIG6_compensation(HL, src)
+    src, fs = sf.read("/home/deepni/datasets/dns_wdrc/dev_vad/0_shrink_transform.wav")
+    out, meta = FIG6_compensation(HL, src)
     print(out.shape, src.shape)
-    # sf.write("out.wav", out, fs)
+    sf.write("/home/deepni/github/out.wav", out, fs)
+
+    # draw_file("/home/deepni/github/out.wav")
+    plt.plot(out[:-2])
+    plt.savefig("/home/deepni/github/out_wav.svg", bbox_inches="tight")
     # sf.write("src.wav", src, fs)

@@ -17,3 +17,5 @@ model:
   engine:
     name: condConformerVAD_mc36
     train_batch_sz: 12
+  predictor:
+    root_save_dir: condConformerVAD_mc36

@@ -1,0 +1,8 @@
+# @package _global_
+defaults:
+  - override /model: deepMFC
+
+model:
+  engine:
+    _target_: core.trainer.Trainer_AFC.Trainer
+    woRef: True

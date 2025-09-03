@@ -5,7 +5,7 @@ import torch
 
 class REC(object):
     def __init__(self, keep: bool = False):
-        self._state_dict: Dict[str, Union[Dict[str, Any], List[Any]]] = {}
+        self._state_dict: Dict[str, Dict[str, Any] | List[Any]] = {}
         self.keep = keep
 
     def compute(self, inp: Dict, stat: Dict):
@@ -38,15 +38,18 @@ class REC(object):
         self._state_dict.update({key: [value + v, num + 1, hist]})
 
     def update_sub(self, itm: str, v: Dict):
-        sub: Dict = self._state_dict.get(itm, {})
+        sub = self._state_dict.get(itm, {})
         for k, d in v.items():
-            d = d.item() if isinstance(d, torch.Tensor) else d
-            value, num, hist = sub.get(k, [0.0, 0, []])
-            hist: List
-            hist.append(d) if self.keep else None
-            sub.update({k: [value + d, num + 1, hist]})
-            if itm not in self._state_dict:
-                self._state_dict[itm] = sub
+            if isinstance(d, dict):
+                self.update_sub(k, d)
+            else:
+                d = d.item() if isinstance(d, torch.Tensor) else d
+                value, num, hist = sub.get(k, [0.0, 0, []])
+                hist: List
+                hist.append(d) if self.keep else None
+                sub.update({k: [value + d, num + 1, hist]})
+                if itm not in self._state_dict:
+                    self._state_dict[itm] = sub
 
     def update(self, v: Union[Dict, float, torch.Tensor], key: Optional[str] = None):
         """
@@ -60,6 +63,7 @@ class REC(object):
                 else:
                     self.update_by_key(v, k)
         else:  # v is float
+            assert key is not None
             self.update_by_key(v, key)
 
     def __str__(self):

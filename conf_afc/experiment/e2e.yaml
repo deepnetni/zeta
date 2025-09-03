@@ -1,0 +1,6 @@
+# @package _global_
+defaults:
+  - override /model: afc_e2e
+# model:
+#   engine:
+#     _target_: core.trainer.Trainer_AFC.TrainerE2E

@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from einops import rearrange
 
-from models.PMSQE.pmsqe_asteroid import SingleSrcPMSQE
+from comps.PMSQE.pmsqe_asteroid import SingleSrcPMSQE
 from torch import Tensor
 from typing import Callable
 

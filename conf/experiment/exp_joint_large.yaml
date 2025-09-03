@@ -1,0 +1,22 @@
+# @package _global_
+defaults:
+  - override /model: joint
+  # - override /dset: libriDemand
+
+dset:
+  train:
+    vad: True
+  valid:
+    vad: True
+  vtest:
+    vad: True
+
+model:
+  net:
+    _target_: core.JointNSHModel.BaselineConditionalConformerVAD8
+    mid_channel: 72
+  engine:
+    name: condConformerVAD_mc72
+    train_batch_sz: 12
+  predictor:
+    root_save_dir: condConformerVAD8_mc72

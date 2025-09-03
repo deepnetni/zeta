@@ -9,3 +9,6 @@ model:
     num_layers: 2
   engine:
     train_batch_sz: 4
+
+  predictor:
+    _target_: core.Trainer_wGAN_for_fig6.Predictor
