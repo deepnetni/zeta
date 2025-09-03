@@ -16,6 +16,7 @@ tmp/
 .*
 !.prettierrc.json
 !.gitignore
+!.pylintrc
 
 *.xlsx
 spectrum/
