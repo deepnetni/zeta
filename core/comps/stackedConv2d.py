@@ -54,7 +54,6 @@ class StackedConv2d(nn.Module):
         state = []
         for l in self.layer:
             x = l(x)
-            print(x.shape)
             state.append(x)
 
         return x, state
