@@ -1,32 +1,27 @@
 import os
 import pickle
 import sys
-from typing import Dict, Optional, Tuple
 
 # adding xx/core
 # sys.path.append(__file__.rsplit("/", 2)[0])
 from pathlib import Path
+from typing import Dict, Tuple
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 import torch
 import torch.nn.functional as F
+from core.utils.audiolib_pt import AcousticFeedbackSim
+from Engine import Engine
 from joblib import Parallel, delayed
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 from torchmetrics.functional.audio.sdr import signal_distortion_ratio as SDR
 from tqdm import tqdm
-from core.utils.audiolib_pt import AcousticFeedbackSim
 
-from utils.check_flops import check_flops
-from utils.focal_loss import BCEFocalLoss
-from utils.HAids.PyFIG6.pyFIG6 import FIG6_compensation_vad
-from utils.HAids.PyHASQI.preset_parameters import generate_filter_params
-from utils.losses import loss_pmsqe
-from utils.record import REC
-from Engine import Engine
 from utils.audiolib import audiowrite
+
 
 # os.environ["TORCH_SHOW_CPP_STACKTRACES"] = "1"
 # os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
@@ -284,10 +279,9 @@ class Trainer(Engine):
                     with torch.no_grad():
                         enh, h = self.net(mix, ref, h, online=True)  # B,T
 
-                enh_g = enh * G
-                fb_data = FB(enh_g.detach())
+                ref = enh.detach() * G
+                fb_data = FB(ref)
                 fb_data_ = FB_(raw * G)
-                ref = enh_g.detach()
                 out_.append(enh)
                 raw_.append(raw)
 
@@ -310,9 +304,10 @@ class Trainer(Engine):
             n_idx += 1
 
     def _net_flops(self) -> int:
-        from thop import profile
-        import warnings
         import copy
+        import warnings
+
+        from thop import profile
 
         x = torch.randn(1, 64)
         self.net.reset_buff(x)

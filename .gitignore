@@ -17,6 +17,7 @@ tmp/
 !.prettierrc.json
 !.gitignore
 !.pylintrc
+!.flake8
 
 *.xlsx
 spectrum/
